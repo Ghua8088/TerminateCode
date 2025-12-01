@@ -4,7 +4,7 @@
 
 # TerminateCode 💻
 <p align="center">
-  <img src="example.png" alt="TerminateCode Logo" width="128" />
+  <img src="example.png" alt="TerminateCode Screenshot" />
 </p>
 **An experimental, lightweight IDE built with [Pytron](https://github.com/Ghua8088/pytron).**
 
