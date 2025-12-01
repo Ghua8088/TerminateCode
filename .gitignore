@@ -1,0 +1,6 @@
+frontend/node_modules
+./env
+/build
+/dist
+*.exe
+*.spec
