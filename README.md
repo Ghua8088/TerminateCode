@@ -3,7 +3,9 @@
 </p>
 
 # TerminateCode 💻
-
+<p align="center">
+  <img src="example.png" alt="TerminateCode Logo" width="128" />
+</p>
 **An experimental, lightweight IDE built with [Pytron](https://github.com/Ghua8088/pytron).**
 
 TerminateCode is a proof-of-concept IDE that aims to provide a VS Code-like experience using the power of Python and Web Technologies. It's currently a work in progress, slowly coming together, but it demonstrates the capabilities of the Pytron framework for building complex desktop applications.
