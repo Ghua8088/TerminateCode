@@ -1,10 +1,11 @@
 {
     "title": "TerminateCode",
-    "width": 800,
-    "height": 600,
+    "dimensions":[1000, 700],
+    "version" : "1.0.1",
     "resizable": true,
-    "frameless": false,
+    "frameless": true,
     "easy_drag": true,
     "url": "frontend/dist/index.html",
-    "icon": "favicon.png"
+    "icon": "favicon.png",
+    "debug": true
 }

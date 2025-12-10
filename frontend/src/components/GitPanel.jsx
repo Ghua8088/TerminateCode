@@ -1,20 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { GitBranch, RefreshCw, Check, Plus, RotateCcw } from 'lucide-react';
 import pytron from 'pytron-client';
+import { useToast } from 'pytron-ui';
+import { useTheme } from 'pytron-ui';
 
 const GitPanel = () => {
   const [changes, setChanges] = useState([]);
   const [message, setMessage] = useState('');
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const { addToast } = useToast();
+  const theme = useTheme();
 
-  const loadStatus = async () => {
-    setLoading(true);
-    setError(null);
+  const loadStatus = React.useCallback(async () => {
     try {
       const res = await pytron.get_git_status('.');
       if (res.success) {
         setChanges(res.changes);
+        setError(null);
       } else {
         setError(res.error);
         setChanges([]);
@@ -22,12 +24,11 @@ const GitPanel = () => {
     } catch (err) {
       setError(err.message);
     }
-    setLoading(false);
-  };
+  }, []);
 
   useEffect(() => {
     loadStatus();
-  }, []);
+  }, [loadStatus]);
 
   const handleStage = async (file) => {
     try {
@@ -55,15 +56,15 @@ const GitPanel = () => {
         setMessage('');
         loadStatus();
       } else {
-        alert('Commit failed: ' + res.error);
+        addToast('Commit failed: ' + res.error, { type: 'error' });
       }
     } catch (e) {
-      alert('Error: ' + e);
+      addToast('Error: ' + e, { type: 'error' });
     }
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#252526' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: theme.surface }}>
       <div style={{
         padding: '10px',
         borderBottom: '1px solid #333',
@@ -93,9 +94,9 @@ const GitPanel = () => {
             onChange={(e) => setMessage(e.target.value)}
             placeholder="Message (Ctrl+Enter to commit)"
             onKeyDown={(e) => {
-                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                    handleCommit();
-                }
+              if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                handleCommit();
+              }
             }}
             style={{
               flex: 1,
@@ -130,8 +131,8 @@ const GitPanel = () => {
 
       <div style={{ flex: 1, overflowY: 'auto' }}>
         <div style={{ padding: '8px 10px', fontSize: '11px', fontWeight: 'bold', color: '#bbb', display: 'flex', justifyContent: 'space-between' }}>
-            <span>CHANGES ({changes.length})</span>
-            <Plus size={12} style={{ cursor: 'pointer' }} onClick={handleStageAll} title="Stage All" />
+          <span>CHANGES ({changes.length})</span>
+          <Plus size={12} style={{ cursor: 'pointer' }} onClick={handleStageAll} title="Stage All" />
         </div>
         {changes.map((change, idx) => (
           <div key={idx} style={{
@@ -144,18 +145,18 @@ const GitPanel = () => {
             ':hover': { backgroundColor: '#2a2d2e' }
           }} className="git-item">
             <span style={{
-                marginRight: '8px',
-                fontSize: '11px',
-                color: change.status.includes('M') ? '#e2c08d' : change.status.includes('A') ? '#73c991' : '#999',
-                width: '20px'
+              marginRight: '8px',
+              fontSize: '11px',
+              color: change.status.includes('M') ? '#e2c08d' : change.status.includes('A') ? '#73c991' : '#999',
+              width: '20px'
             }}>
-                {change.status}
+              {change.status.split(' ')[0]}
             </span>
             <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={change.file}>
-                {change.file}
+              {change.file}
             </span>
             <div className="git-actions" style={{ display: 'none', marginLeft: 'auto', gap: '4px' }}>
-                <Plus size={12} style={{ cursor: 'pointer' }} onClick={() => handleStage(change.file)} title="Stage" />
+              <Plus size={12} style={{ cursor: 'pointer' }} onClick={() => handleStage(change.file)} title="Stage" />
             </div>
           </div>
         ))}

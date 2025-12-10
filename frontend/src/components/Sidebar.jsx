@@ -1,12 +1,17 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import pytron from 'pytron-client';
-import { Folder, FileCode, Search, Files, Settings, RefreshCw, FilePlus, FolderPlus, Trash2, FolderOpen, Bot, GitBranch } from 'lucide-react';
+import { Folder, FileCode, Search, Files, Settings, RefreshCw, FilePlus, FolderPlus, Trash2, FolderOpen, Bot, GitBranch, Edit2, Zap } from 'lucide-react';
 import SearchPanel from './SearchPanel';
 import AIPanel from './AIPanel';
 import GitPanel from './GitPanel';
+import ToolsPanel from './ToolsPanel';
+import FileIcon from './FileIcon';
+import { useToast } from 'pytron-ui';
+import { useTheme } from 'pytron-ui';
+import ResizeHandle from './ResizeHandle';
 
-const NewItemInput = ({ type, onConfirm, onCancel }) => {
-  const [value, setValue] = useState('');
+const NewItemInput = ({ type, onConfirm, onCancel, initialValue = '' }) => {
+  const [value, setValue] = useState(initialValue);
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter') {
@@ -43,9 +48,10 @@ const NewItemInput = ({ type, onConfirm, onCancel }) => {
   );
 };
 
-const FileItem = ({ item, onSelect, onDelete, level = 0 }) => {
+const FileItem = ({ item, onSelect, onDelete, onRename, level = 0 }) => {
   const [expanded, setExpanded] = useState(false);
   const [children, setChildren] = useState([]);
+  const [isRenaming, setIsRenaming] = useState(false);
 
   const fetchChildren = async () => {
     const res = await pytron.list_dir(item.path);
@@ -74,6 +80,32 @@ const FileItem = ({ item, onSelect, onDelete, level = 0 }) => {
     return success;
   };
 
+  const handleChildRename = async (childItem, newName) => {
+    const success = await onRename(childItem, newName);
+    if (success) {
+      fetchChildren();
+    }
+    return success;
+  };
+
+  if (isRenaming) {
+    return (
+      <div style={{ paddingLeft: `${level * 12}px` }}>
+        <NewItemInput
+          type={item.is_dir ? 'folder' : 'file'}
+          initialValue={item.name}
+          onConfirm={async (newName) => {
+            if (newName !== item.name) {
+              await onRename(item, newName);
+            }
+            setIsRenaming(false);
+          }}
+          onCancel={() => setIsRenaming(false)}
+        />
+      </div>
+    );
+  }
+
   return (
     <>
       <div
@@ -95,12 +127,21 @@ const FileItem = ({ item, onSelect, onDelete, level = 0 }) => {
         {item.is_dir ? (
           <Folder size={14} style={{ marginRight: '6px', color: '#dcb67a' }} />
         ) : (
-          <FileCode size={14} style={{ marginRight: '6px', color: '#4fc1ff' }} />
+          <FileIcon name={item.name} size={14} style={{ marginRight: '6px' }} />
         )}
         <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>
           {item.name}
         </span>
-        <div className="file-actions" style={{ display: 'none', marginLeft: 'auto' }}>
+        <div className="file-actions" style={{ display: 'none', marginLeft: 'auto', gap: '4px' }}>
+          <Edit2
+            size={12}
+            color="#ccc"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsRenaming(true);
+            }}
+            title="Rename"
+          />
           <Trash2
             size={12}
             color="#ff6b6b"
@@ -108,6 +149,7 @@ const FileItem = ({ item, onSelect, onDelete, level = 0 }) => {
               e.stopPropagation();
               onDelete(item);
             }}
+            title="Delete"
           />
         </div>
       </div>
@@ -117,6 +159,7 @@ const FileItem = ({ item, onSelect, onDelete, level = 0 }) => {
           item={child}
           onSelect={onSelect}
           onDelete={handleChildDelete}
+          onRename={handleChildRename}
           level={level + 1}
         />
       ))}
@@ -128,6 +171,8 @@ const Explorer = ({ onFileOpen }) => {
   const [items, setItems] = useState([]);
   const [currentPath, setCurrentPath] = useState('.');
   const [creatingType, setCreatingType] = useState(null); // 'file' or 'folder'
+  const { addToast } = useToast();
+  const theme = useTheme();
 
   const loadDir = useCallback(async (path) => {
     try {
@@ -153,10 +198,6 @@ const Explorer = ({ onFileOpen }) => {
       console.log('[Sidebar] onFileOpen', item.path);
       onFileOpen(item);
     }
-  };
-
-  const handleBack = () => {
-    // No-op or remove if we don't want to navigate up from root
   };
 
   const handleCreateConfirm = async (name) => {
@@ -187,15 +228,32 @@ const Explorer = ({ onFileOpen }) => {
 
   const handleDelete = async (item) => {
     if (!confirm(`Are you sure you want to delete ${item.name}?`)) return false;
-    
+
     try {
       const res = await pytron.delete_item(item.path);
       if (!res.success) {
-        alert(`Error: ${res.error}`);
+        addToast(`Error: ${res.error}`, { type: 'error' });
       }
       return res.success;
     } catch (e) {
-      alert(`Error: ${e}`);
+      addToast(`Error: ${e}`, { type: 'error' });
+      return false;
+    }
+  };
+
+  const handleRename = async (item, newName) => {
+    const parentDir = item.path.substring(0, item.path.lastIndexOf(item.name));
+    const newPath = parentDir + newName;
+
+    try {
+      const res = await pytron.rename_item(item.path, newPath);
+      if (!res.success) {
+        addToast(`Error renaming: ${res.error}`, { type: 'error' });
+        return false;
+      }
+      return true;
+    } catch (e) {
+      addToast(`Error: ${e}`, { type: 'error' });
       return false;
     }
   };
@@ -206,17 +264,23 @@ const Explorer = ({ onFileOpen }) => {
     return success;
   };
 
+  const handleRootRename = async (item, newName) => {
+    const success = await handleRename(item, newName);
+    if (success) loadDir(currentPath);
+    return success;
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{
         padding: '10px',
         fontSize: '11px',
         fontWeight: 'bold',
-        color: '#bbb',
+        color: theme.fg,
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        background: '#1e1e1e'
+        background: theme.bg
       }}>
         <span>EXPLORER</span>
         <div style={{ display: 'flex', gap: '8px' }}>
@@ -236,24 +300,52 @@ const Explorer = ({ onFileOpen }) => {
           />
         )}
         {items.map((item, idx) => (
-          <FileItem key={idx} item={item} onSelect={handleItemClick} onDelete={handleRootDelete} />
+          <FileItem
+            key={idx}
+            item={item}
+            onSelect={handleItemClick}
+            onDelete={handleRootDelete}
+            onRename={handleRootRename}
+          />
         ))}
       </div>
       <style>{`
-        .file-item:hover { background-color: #2a2d2e; }
-        .file-item:hover .file-actions { display: block !important; }
+        .file-item:hover { background-color: ${theme.secondary}; }
+        .file-item:hover .file-actions { display: flex !important; }
       `}</style>
     </div>
   );
 };
 
-const Sidebar = ({ onFileOpen, onOpenSettings, activePath, width = '250px' }) => {
+const Sidebar = ({ onFileOpen, onOpenSettings, activePath, width = '250px', onOpenTool }) => {
   const [activeView, setActiveView] = useState('explorer');
+  const [panelWidth, setPanelWidth] = useState(parseInt(width));
+  const [changesCount, setChangesCount] = useState(0);
+  const { addToast } = useToast();
+  const theme = useTheme();
+
+  useEffect(() => {
+    const loadGitStatus = async () => {
+      try {
+        const res = await pytron.get_git_status('.');
+        if (res.success) {
+          setChangesCount(res.changes.length);
+        } else {
+          setChangesCount(0);
+        }
+      } catch (err) {
+        setChangesCount(0);
+      }
+    };
+    loadGitStatus();
+    const interval = setInterval(loadGitStatus, 5000); // Refresh every 5 seconds
+    return () => clearInterval(interval);
+  }, []);
 
   return (
-    <div style={{ display: 'flex', height: '100%', borderRight: '1px solid #333' }}>
+    <div style={{ display: 'flex', height: '100%', borderRight: `1px solid ${theme.border}`, position: 'relative' }}>
       {/* Activity Bar */}
-      <div style={{ width: '48px', background: '#333333', display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: '10px' }}>
+      <div style={{ width: '48px', background: theme.secondary, display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: '10px', flexShrink: 0 }}>
         <div
           onClick={() => setActiveView('explorer')}
           style={{ padding: '10px', cursor: 'pointer', color: activeView === 'explorer' ? '#fff' : '#888', borderLeft: activeView === 'explorer' ? '2px solid #fff' : '2px solid transparent' }}
@@ -277,10 +369,34 @@ const Sidebar = ({ onFileOpen, onOpenSettings, activePath, width = '250px' }) =>
         </div>
         <div
           onClick={() => setActiveView('git')}
-          style={{ padding: '10px', cursor: 'pointer', color: activeView === 'git' ? '#fff' : '#888', borderLeft: activeView === 'git' ? '2px solid #fff' : '2px solid transparent' }}
+          style={{ padding: '10px', cursor: 'pointer', color: activeView === 'git' ? '#fff' : '#888', borderLeft: activeView === 'git' ? '2px solid #fff' : '2px solid transparent', position: 'relative' }}
           title="Source Control"
         >
           <GitBranch size={24} />
+          {changesCount > 0 && (
+            <span style={{
+              position: 'absolute',
+              top: '4px',
+              right: '4px',
+              background: theme.danger,
+              color: '#fff',
+              borderRadius: '10px',
+              fontSize: '10px',
+              padding: '1px 4px',
+              minWidth: '12px',
+              textAlign: 'center',
+              fontWeight: 'bold'
+            }}>
+              {changesCount}
+            </span>
+          )}
+        </div>
+        <div
+          onClick={() => setActiveView('tools')}
+          style={{ padding: '10px', cursor: 'pointer', color: activeView === 'tools' ? '#fff' : '#888', borderLeft: activeView === 'tools' ? '2px solid #fff' : '2px solid transparent' }}
+          title="Tools"
+        >
+          <Zap size={24} />
         </div>
         {/* Placeholder for Settings or other icons */}
         <div
@@ -293,12 +409,18 @@ const Sidebar = ({ onFileOpen, onOpenSettings, activePath, width = '250px' }) =>
       </div>
 
       {/* Side Panel Content */}
-      <div style={{ width: width, minWidth: '150px', background: '#252526', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ width: panelWidth, minWidth: '150px', maxWidth: '600px', background: theme.surface, display: 'flex', flexDirection: 'column' }}>
         {activeView === 'explorer' && <Explorer onFileOpen={onFileOpen} />}
         {activeView === 'search' && <SearchPanel onFileOpen={onFileOpen} />}
         {activeView === 'ai' && <AIPanel activePath={activePath} />}
         {activeView === 'git' && <GitPanel />}
+        {activeView === 'tools' && <ToolsPanel onOpenTool={onOpenTool} />}
       </div>
+      <ResizeHandle
+        orientation="vertical"
+        onResize={(e) => setPanelWidth(Math.max(150, e.clientX - 48))}
+        style={{ position: 'absolute', right: 0, top: 0, bottom: 0 }}
+      />
 
       <style>{`
         .file-item:hover { background-color: #2a2d2e; }

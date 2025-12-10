@@ -14,9 +14,12 @@
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/xterm": "^5.5.0",
     "lucide-react": "^0.555.0",
-    "pytron-client": "^0.1.5",
+    "pytron-client": "^0.1.7",
+    "pytron-ui": "^0.1.2",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "xterm": "^5.3.0",
     "xterm-addon-fit": "^0.8.0"
   },

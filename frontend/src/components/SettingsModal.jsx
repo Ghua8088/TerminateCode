@@ -1,46 +1,75 @@
 import React from 'react';
+import { Modal, Button, Switch, Select, Input } from 'pytron-ui';
 
-const SettingsModal = ({ onClose, settings, onUpdateSettings }) => {
+const SettingsModal = ({ onClose, settings, onUpdateSettings, currentTheme, onThemeChange }) => {
+
+    // Theme options for Select
+    const themeOptions = [
+        { label: 'Dark (VS Code)', value: 'vs-dark' },
+        { label: 'Light', value: 'light' }
+    ];
+
+    const uiThemeOptions = [
+        { label: 'VS Dark', value: 'vs-dark' },
+        { label: 'Light', value: 'light' },
+        { label: 'High Contrast', value: 'high-contrast' }
+    ];
+
     return (
-        <div style={{
-            position: 'fixed',
-            top: 0, left: 0, right: 0, bottom: 0,
-            background: 'rgba(0,0,0,0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000
-        }} onClick={onClose}>
-            <div style={{
-                width: '400px',
-                background: '#252526',
-                border: '1px solid #454545',
-                borderRadius: '5px',
-                padding: '20px',
-                color: '#ccc'
-            }} onClick={e => e.stopPropagation()}>
-                <h2 style={{ marginTop: 0, marginBottom: '20px', fontSize: '18px', color: '#fff' }}>Settings</h2>
+        <Modal
+            isOpen={true} // Controlled by parent rendering
+            onClose={onClose}
+            title="Settings"
+            width="450px"
+            footer={
+                <Button onClick={onClose} variant="primary" style={{ minWidth: '80px' }}>
+                    Close
+                </Button>
+            }
+        >
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                <Input
+                    label="Editor Font Size"
+                    type="number"
+                    value={settings.fontSize}
+                    onChange={(e) => onUpdateSettings({ ...settings, fontSize: parseInt(e.target.value) || 14 })}
+                />
 
-                <div style={{ marginBottom: '15px' }}>
-                    <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px' }}>Editor Font Size</label>
-                    <input
-                        type="number"
-                        value={settings.fontSize}
-                        onChange={(e) => onUpdateSettings({ ...settings, fontSize: parseInt(e.target.value) || 14 })}
-                        style={{ width: '100%', padding: '8px', background: '#3c3c3c', border: '1px solid #333', color: '#fff', outline: 'none' }}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '14px', fontWeight: 500 }}>Word Wrap</span>
+                    <Switch
+                        checked={settings.wordWrap === 'on'}
+                        onChange={(checked) => onUpdateSettings({ ...settings, wordWrap: checked ? 'on' : 'off' })}
                     />
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>
-                    <button
-                        onClick={onClose}
-                        style={{ padding: '8px 16px', background: '#0e639c', color: '#fff', border: 'none', borderRadius: '2px', cursor: 'pointer' }}
-                    >
-                        Close
-                    </button>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '14px', fontWeight: 500 }}>Show Minimap</span>
+                    <Switch
+                        checked={settings.minimap}
+                        onChange={(checked) => onUpdateSettings({ ...settings, minimap: checked })}
+                    />
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--pytron-fg, #fff)' }}>UI Theme</label>
+                    <Select
+                        options={uiThemeOptions}
+                        value={currentTheme}
+                        onChange={onThemeChange}
+                    />
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--pytron-fg, #fff)' }}>Editor Theme</label>
+                    <Select
+                        options={themeOptions}
+                        value={settings.theme || 'vs-dark'}
+                        onChange={(val) => onUpdateSettings({ ...settings, theme: val })}
+                    />
                 </div>
             </div>
-        </div>
+        </Modal>
     );
 };
 

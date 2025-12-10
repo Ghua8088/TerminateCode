@@ -1,17 +1,10 @@
-<p align="center">
-  <img src="favicon.png" alt="TerminateCode Logo" width="128" />
-</p>
-
-# TerminateCode 💻
-<p align="center">
-  <img src="example.png" alt="TerminateCode Screenshot" />
-</p>
+![Terminate-code](Terminate-code-banner.png)
 **An experimental, lightweight IDE built with [Pytron](https://github.com/Ghua8088/pytron).**
 
 TerminateCode is a proof-of-concept IDE that aims to provide a VS Code-like experience using the power of Python and Web Technologies. It's currently a work in progress, slowly coming together, but it demonstrates the capabilities of the Pytron framework for building complex desktop applications.
-
+[]
 > ⚠️ **Note:** This project is in early development. Expect bugs, missing features, and general chaos. It's not the best yet, but we're getting there!
-
+![Example-Screenshot](example.png)
 ## Why Pytron?
 
 TerminateCode is built entirely using **Pytron**, leveraging:

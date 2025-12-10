@@ -1,0 +1,6 @@
+{
+    "dependencies": [
+        "black",
+        "pytron-kit"
+    ]
+}

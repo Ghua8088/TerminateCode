@@ -1,12 +1,18 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import Editor from '@monaco-editor/react';
 import pytron from 'pytron-client';
+import { BookOpen, Code } from 'lucide-react';
+import MarkdownPreview from './MarkdownPreview';
+import { useToast } from 'pytron-ui';
 
-const CodeEditor = ({ activePath, onCursorChange, fontSize = 14 }) => {
+const CodeEditor = ({ activePath, onCursorChange, settings = {} }) => {
+  const { fontSize = 14, wordWrap = 'off', minimap = false, theme = 'vs-dark' } = settings;
   const [codeMap, setCodeMap] = useState({});
   const [languageMap, setLanguageMap] = useState({});
   const [isDirtyMap, setIsDirtyMap] = useState({});
+  const [showPreview, setShowPreview] = useState(false);
   const editorRef = useRef(null);
+  const { addToast } = useToast();
 
   useEffect(() => {
     const loadContent = async (path) => {
@@ -44,14 +50,14 @@ const CodeEditor = ({ activePath, onCursorChange, fontSize = 14 }) => {
       const res = await pytron.save_file_content(activePath, content);
       if (res.success) {
         setIsDirtyMap((m) => ({ ...m, [activePath]: false }));
-        alert('Saved!');
+        addToast('Saved!', { type: 'success' });
       } else {
-        alert('Failed to save: ' + res.error);
+        addToast('Failed to save: ' + res.error, { type: 'error' });
       }
     } catch (err) {
-      alert('Error: ' + err);
+      addToast('Error: ' + err, { type: 'error' });
     }
-  }, [activePath, codeMap]);
+  }, [activePath, codeMap, addToast]);
 
   // Keyboard shortcut for save
   useEffect(() => {
@@ -85,6 +91,7 @@ const CodeEditor = ({ activePath, onCursorChange, fontSize = 14 }) => {
   const language = languageMap[activePath] ?? 'plaintext';
   const isDirty = !!isDirtyMap[activePath];
   const name = activePath.split(/[\\/]/).pop();
+  const isMarkdown = language === 'markdown';
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
@@ -100,27 +107,47 @@ const CodeEditor = ({ activePath, onCursorChange, fontSize = 14 }) => {
       }}>
         <span style={{ color: '#fff' }}>{name}</span>
         {isDirty && <span style={{ marginLeft: '8px', width: '8px', height: '8px', borderRadius: '50%', background: '#fff' }}></span>}
-        <div style={{ marginLeft: 'auto', color: '#888', fontSize: '12px' }}>{language}</div>
+
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {isMarkdown && (
+            <div
+              onClick={() => setShowPreview(!showPreview)}
+              style={{ cursor: 'pointer', color: showPreview ? '#4fc1ff' : '#888', display: 'flex', alignItems: 'center' }}
+              title={showPreview ? "Hide Preview" : "Show Preview"}
+            >
+              {showPreview ? <Code size={14} /> : <BookOpen size={14} />}
+            </div>
+          )}
+          <div style={{ color: '#888', fontSize: '12px' }}>{language}</div>
+        </div>
       </div>
-      <div style={{ flex: 1, minHeight: 0 }}>
-        <Editor
-          height="100%"
-          defaultLanguage={language}
-          language={language}
-          value={code}
-          theme="vs-dark"
-          onMount={onEditorMount}
-          onChange={(value) => {
-            setCodeMap((m) => ({ ...m, [activePath]: value }));
-            setIsDirtyMap((m) => ({ ...m, [activePath]: true }));
-          }}
-          options={{
-            minimap: { enabled: false },
-            fontSize: fontSize,
-            scrollBeyondLastLine: false,
-            automaticLayout: true
-          }}
-        />
+      <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <Editor
+            height="100%"
+            defaultLanguage={language}
+            language={language}
+            value={code}
+            theme={theme}
+            onMount={onEditorMount}
+            onChange={(value) => {
+              setCodeMap((m) => ({ ...m, [activePath]: value }));
+              setIsDirtyMap((m) => ({ ...m, [activePath]: true }));
+            }}
+            options={{
+              minimap: { enabled: minimap },
+              fontSize: fontSize,
+              wordWrap: wordWrap,
+              scrollBeyondLastLine: false,
+              automaticLayout: true
+            }}
+          />
+        </div>
+        {isMarkdown && showPreview && (
+          <div style={{ flex: 1, borderLeft: '1px solid #333', minWidth: 0 }}>
+            <MarkdownPreview content={code} />
+          </div>
+        )}
       </div>
     </div>
   );
