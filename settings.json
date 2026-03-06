@@ -1,7 +1,10 @@
 {
     "title": "TerminateCode",
-    "dimensions":[1000, 700],
-    "version" : "1.0.1",
+    "dimensions": [
+        1000,
+        700
+    ],
+    "version": "1.0.1",
     "resizable": true,
     "frameless": true,
     "easy_drag": true,

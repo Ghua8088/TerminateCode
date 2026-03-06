@@ -1,13 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import pytron from 'pytron-client';
-import { Folder, FileCode, Search, Files, Settings, RefreshCw, FilePlus, FolderPlus, Trash2, FolderOpen, Bot, GitBranch, Edit2, Zap } from 'lucide-react';
+import { Folder, FileCode, Search, Files, Settings, RefreshCw, FilePlus, FolderPlus, Trash2, FolderOpen, GitBranch, Edit2, Zap, Bot } from 'lucide-react';
 import SearchPanel from './SearchPanel';
-import AIPanel from './AIPanel';
 import GitPanel from './GitPanel';
 import ToolsPanel from './ToolsPanel';
 import FileIcon from './FileIcon';
-import { useToast } from 'pytron-ui';
-import { useTheme } from 'pytron-ui';
+import ConfirmModal from './ConfirmModal';
+import { useToast, useTheme } from 'pytron-ui/react';
 import ResizeHandle from './ResizeHandle';
 
 const NewItemInput = ({ type, onConfirm, onCancel, initialValue = '' }) => {
@@ -58,6 +57,14 @@ const FileItem = ({ item, onSelect, onDelete, onRename, level = 0 }) => {
     if (res.success) setChildren(res.items);
   };
 
+  useEffect(() => {
+    if (expanded) {
+      const handler = () => fetchChildren();
+      window.addEventListener('fs_change', handler);
+      return () => window.removeEventListener('fs_change', handler);
+    }
+  }, [expanded, item.path]);
+
   const handleToggle = async (e) => {
     e.stopPropagation();
     if (item.is_dir) {
@@ -73,11 +80,8 @@ const FileItem = ({ item, onSelect, onDelete, onRename, level = 0 }) => {
   };
 
   const handleChildDelete = async (childItem) => {
-    const success = await onDelete(childItem);
-    if (success) {
-      fetchChildren();
-    }
-    return success;
+    onDelete(childItem);
+    return true;
   };
 
   const handleChildRename = async (childItem, newName) => {
@@ -171,6 +175,7 @@ const Explorer = ({ onFileOpen }) => {
   const [items, setItems] = useState([]);
   const [currentPath, setCurrentPath] = useState('.');
   const [creatingType, setCreatingType] = useState(null); // 'file' or 'folder'
+  const [confirmDelete, setConfirmDelete] = useState(null); // Item to delete
   const { addToast } = useToast();
   const theme = useTheme();
 
@@ -189,9 +194,11 @@ const Explorer = ({ onFileOpen }) => {
   }, []);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    loadDir('.');
-  }, [loadDir]);
+    loadDir(currentPath);
+    const handler = () => loadDir(currentPath);
+    window.addEventListener('fs_change', handler);
+    return () => window.removeEventListener('fs_change', handler);
+  }, [loadDir, currentPath]);
 
   const handleItemClick = (item) => {
     if (!item.is_dir) {
@@ -205,7 +212,7 @@ const Explorer = ({ onFileOpen }) => {
     try {
       const res = await pytron.create_item(path, creatingType === 'folder');
       if (res.success) {
-        loadDir(currentPath);
+        window.dispatchEvent(new Event('fs_change'));
       } else {
         console.error(`Error: ${res.error}`);
       }
@@ -227,18 +234,21 @@ const Explorer = ({ onFileOpen }) => {
   };
 
   const handleDelete = async (item) => {
-    if (!confirm(`Are you sure you want to delete ${item.name}?`)) return false;
+    setConfirmDelete(item);
+  };
 
+  const executeDelete = async (item) => {
     try {
       const res = await pytron.delete_item(item.path);
       if (!res.success) {
         addToast(`Error: ${res.error}`, { type: 'error' });
+      } else {
+        window.dispatchEvent(new Event('fs_change'));
       }
-      return res.success;
     } catch (e) {
       addToast(`Error: ${e}`, { type: 'error' });
-      return false;
     }
+    setConfirmDelete(null); // Close modal after action
   };
 
   const handleRename = async (item, newName) => {
@@ -251,6 +261,7 @@ const Explorer = ({ onFileOpen }) => {
         addToast(`Error renaming: ${res.error}`, { type: 'error' });
         return false;
       }
+      window.dispatchEvent(new Event('fs_change'));
       return true;
     } catch (e) {
       addToast(`Error: ${e}`, { type: 'error' });
@@ -309,6 +320,18 @@ const Explorer = ({ onFileOpen }) => {
           />
         ))}
       </div>
+
+      {confirmDelete && (
+        <ConfirmModal
+          isOpen={true}
+          title="Delete Item"
+          message={`Are you sure you want to delete "${confirmDelete.name}"? This action cannot be undone.`}
+          onConfirm={() => executeDelete(confirmDelete)}
+          onClose={() => setConfirmDelete(null)}
+          variant="danger"
+        />
+      )}
+
       <style>{`
         .file-item:hover { background-color: ${theme.secondary}; }
         .file-item:hover .file-actions { display: flex !important; }
@@ -317,7 +340,7 @@ const Explorer = ({ onFileOpen }) => {
   );
 };
 
-const Sidebar = ({ onFileOpen, onOpenSettings, activePath, width = '250px', onOpenTool }) => {
+const Sidebar = ({ onFileOpen, onDiffOpen, onOpenSettings, activePath, width = '250px', onOpenTool, settings }) => {
   const [activeView, setActiveView] = useState('explorer');
   const [panelWidth, setPanelWidth] = useState(parseInt(width));
   const [changesCount, setChangesCount] = useState(0);
@@ -361,13 +384,6 @@ const Sidebar = ({ onFileOpen, onOpenSettings, activePath, width = '250px', onOp
           <Search size={24} />
         </div>
         <div
-          onClick={() => setActiveView('ai')}
-          style={{ padding: '10px', cursor: 'pointer', color: activeView === 'ai' ? '#fff' : '#888', borderLeft: activeView === 'ai' ? '2px solid #fff' : '2px solid transparent' }}
-          title="Pytron AI"
-        >
-          <Bot size={24} />
-        </div>
-        <div
           onClick={() => setActiveView('git')}
           style={{ padding: '10px', cursor: 'pointer', color: activeView === 'git' ? '#fff' : '#888', borderLeft: activeView === 'git' ? '2px solid #fff' : '2px solid transparent', position: 'relative' }}
           title="Source Control"
@@ -398,7 +414,7 @@ const Sidebar = ({ onFileOpen, onOpenSettings, activePath, width = '250px', onOp
         >
           <Zap size={24} />
         </div>
-        {/* Placeholder for Settings or other icons */}
+        {/* Activity Bar AI removed to move to TitleBar */}
         <div
           style={{ marginTop: 'auto', padding: '10px', cursor: 'pointer', color: '#888' }}
           onClick={onOpenSettings}
@@ -412,8 +428,7 @@ const Sidebar = ({ onFileOpen, onOpenSettings, activePath, width = '250px', onOp
       <div style={{ width: panelWidth, minWidth: '150px', maxWidth: '600px', background: theme.surface, display: 'flex', flexDirection: 'column' }}>
         {activeView === 'explorer' && <Explorer onFileOpen={onFileOpen} />}
         {activeView === 'search' && <SearchPanel onFileOpen={onFileOpen} />}
-        {activeView === 'ai' && <AIPanel activePath={activePath} />}
-        {activeView === 'git' && <GitPanel />}
+        {activeView === 'git' && <GitPanel onDiffOpen={onDiffOpen} />}
         {activeView === 'tools' && <ToolsPanel onOpenTool={onOpenTool} />}
       </div>
       <ResizeHandle
