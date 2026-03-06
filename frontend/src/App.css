@@ -13,3 +13,17 @@ body {
   width: 100vw;
   height: 100vh;
 }
+
+.titlebar-toggle {
+  transition: all 0.2s ease;
+  color: #888;
+}
+.titlebar-toggle:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: #fff !important;
+}
+.titlebar-toggle.active {
+  color: #4fc1ff !important;
+  background: rgba(79, 193, 255, 0.1) !important;
+}
+

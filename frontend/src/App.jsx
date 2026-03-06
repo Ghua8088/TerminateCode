@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect, Suspense } from 'react';
 
 import Sidebar from './components/Sidebar';
+import { Layout, PanelLeft, PanelBottom, PanelRight, Bot } from 'lucide-react';
 const CodeEditor = React.lazy(() => import('./components/Editor'));
 import TabsBar from './components/TabsBar';
 import StatusBar from './components/StatusBar';
@@ -10,12 +11,14 @@ import RegexLab from './components/RegexLab';
 import CodeMetrics from './components/CodeMetrics';
 import ImportLens from './components/ImportLens';
 import BytecodeViewer from './components/BytecodeViewer';
+import MarkdownPreview from './components/MarkdownPreview';
+import AIPanel from './components/AIPanel';
 import './App.css';
-import { TitleBar, MenuBar, ToastProvider, useToast } from 'pytron-ui';
-import pytron from 'pytron-client'; 
+import { PytronTitleBar, PytronMenuBar, ToastProvider, useToast } from 'pytron-ui/react';
+import pytron from 'pytron-client';
 import TerminalPanel from './components/TerminalPanel';
 import SettingsModal from './components/SettingsModal';
-import { useTheme } from 'pytron-ui';
+import { useTheme } from 'pytron-ui/react';
 import ResizeHandle from './components/ResizeHandle';
 
 function MainApp({ currentTheme, onThemeChange }) {
@@ -23,6 +26,7 @@ function MainApp({ currentTheme, onThemeChange }) {
   const [activePath, setActivePath] = useState(null);
   const [cursorInfo, setCursorInfo] = useState({ line: 1, column: 1 });
   const [showPalette, setShowPalette] = useState(false);
+  const [showSidebar, setShowSidebar] = useState(true);
   const [showTerminal, setShowTerminal] = useState(true);
   const [pendingCommand, setPendingCommand] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
@@ -32,25 +36,91 @@ function MainApp({ currentTheme, onThemeChange }) {
   const [showMetrics, setShowMetrics] = useState(false);
   const [showImports, setShowImports] = useState(false);
   const [showBytecode, setShowBytecode] = useState(false);
-  const [terminalHeight, setTerminalHeight] = useState(200);
+  const [showAI, setShowAI] = useState(false);
+  const [aiMessages, setAiMessages] = useState([]);
+  const [terminalHeight, setTerminalHeight] = useState(250);
   const [toolWidth, setToolWidth] = useState(300);
+  const [sideWidth, setSideWidth] = useState(350);
+  const [isInitialized, setIsInitialized] = useState(false);
   const { addToast } = useToast();
   const theme = useTheme();
 
+  // 1. LOAD Workspace State on Mount
+  useEffect(() => {
+    const loadSession = async () => {
+      try {
+        const res = await pytron.load_workspace_state();
+        if (res.success && res.state) {
+          const s = res.state;
+          if (s.openFiles) setOpenFiles(s.openFiles);
+          if (s.activePath) setActivePath(s.activePath);
+          if (typeof s.showSidebar === 'boolean') setShowSidebar(s.showSidebar);
+          if (typeof s.showTerminal === 'boolean') setShowTerminal(s.showTerminal);
+          if (typeof s.showAI === 'boolean') setShowAI(s.showAI);
+          if (s.terminalHeight) setTerminalHeight(s.terminalHeight);
+          if (s.toolWidth) setToolWidth(s.toolWidth);
+          if (s.sideWidth) setSideWidth(s.sideWidth);
+          if (s.settings) setSettings(s.settings);
+          if (s.aiMessages) setAiMessages(s.aiMessages);
+        }
+      } catch (e) {
+        console.error("Failed to load session", e);
+      } finally {
+        setIsInitialized(true);
+      }
+    };
+    loadSession();
+  }, []);
+
+  // 2. SAVE Workspace State on Change
+  useEffect(() => {
+    if (!isInitialized) return;
+
+    const saveSession = async () => {
+      try {
+        await pytron.save_workspace_state({
+          openFiles,
+          activePath,
+          showSidebar,
+          showTerminal,
+          showAI,
+          terminalHeight,
+          toolWidth,
+          sideWidth,
+          settings,
+          aiMessages
+        });
+      } catch (e) {
+        console.error("Failed to save session", e);
+      }
+    };
+
+    const timer = setTimeout(saveSession, 1000); // 1s Debounce
+    return () => clearTimeout(timer);
+  }, [openFiles, activePath, showSidebar, showTerminal, showAI, terminalHeight, toolWidth, settings, aiMessages, isInitialized]);
+
   const openFile = useCallback((file) => {
-    console.log('[App] openFile called', file.path);
     setOpenFiles((prev) => {
-      const exists = prev.find((f) => f.path === file.path);
+      const exists = prev.find((f) => f.path === file.path && (!file.type || f.type === file.type));
       if (exists) {
         setActivePath(file.path);
         return prev;
       }
-      const next = [...prev, file];
-      console.log('[App] openFile - next openFiles:', next.map(f => f.path));
-      setActivePath(file.path);
-      return next;
+      return [...prev, file];
     });
+    setActivePath(file.path);
   }, []);
+
+  const openDiff = useCallback((path) => {
+    const diffPath = `diff:${path}`;
+    const fileObj = {
+      path: diffPath,
+      realPath: path,
+      name: `${path.split(/[\\/]/).pop()} (Diff)`,
+      type: 'diff'
+    };
+    openFile(fileObj);
+  }, [openFile]);
 
   const closeFile = useCallback((path) => {
     console.log('[App] closeFile called', path);
@@ -87,6 +157,15 @@ function MainApp({ currentTheme, onThemeChange }) {
     addToast(`Running ${activePath.split(/[\\/]/).pop()}...`, { type: 'info', duration: 2000 });
   }, [activePath, addToast]);
 
+  const cycleTabs = useCallback(() => {
+    console.log('[App] cycleTabs called - count:', openFiles.length);
+    if (openFiles.length <= 1) return;
+    const currentIndex = openFiles.findIndex(f => f.path === activePath);
+    const nextIndex = (currentIndex + 1) % openFiles.length;
+    const nextPath = openFiles[nextIndex].path;
+    setActivePath(nextPath);
+  }, [openFiles, activePath]);
+
   useEffect(() => {
     console.log('[App] activePath changed', activePath);
   }, [activePath]);
@@ -105,10 +184,26 @@ function MainApp({ currentTheme, onThemeChange }) {
         e.preventDefault();
         setShowSettings(true);
       }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'n') { // Swap Tabs
+        e.preventDefault();
+        cycleTabs();
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'w') { // Close Tab
+        e.preventDefault();
+        if (activePath) closeFile(activePath);
+      }
+      // Ctrl + 1-9 to switch tabs
+      if ((e.ctrlKey || e.metaKey) && e.key >= '1' && e.key <= '9') {
+        const index = parseInt(e.key) - 1;
+        if (openFiles[index]) {
+          e.preventDefault();
+          setActivePath(openFiles[index].path);
+        }
+      }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, []);
+  }, [cycleTabs, closeFile, activePath, openFiles]);
 
   const handleOpenTool = async (toolId) => {
     if (toolId === 'regex') setShowRegexLab(true);
@@ -116,6 +211,7 @@ function MainApp({ currentTheme, onThemeChange }) {
     if (toolId === 'imports') setShowImports(true);
     if (toolId === 'preview') setShowWebPreview(true);
     if (toolId === 'bytecode') setShowBytecode(true);
+    if (toolId === 'ai' || toolId === 'gemini') setShowAI(true);
     if (toolId === 'format') {
       if (!activePath || !activePath.endsWith('.py')) {
         addToast('Please select a Python file to format.', { type: 'warning' });
@@ -210,22 +306,54 @@ function MainApp({ currentTheme, onThemeChange }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: theme.bg, color: theme.fg }}>
-      <TitleBar title="" icon={<img src="favicon.png" alt="icon" style={{height:"16px",width:"16px"}}/>} variant="windows" onClose={() => window.close()}>
+      <PytronTitleBar title="" icon={<img src="favicon.png" alt="icon" style={{ height: "16px", width: "16px" }} />} variant="windows" onClose={() => window.close()}>
         <div
           onMouseDown={(e) => e.stopPropagation()}
-          style={{ height: '100%', display: 'flex', alignItems: 'center', marginLeft: '-8px' }}
+          style={{ height: '100%', display: 'flex', alignItems: 'center', marginLeft: '-8px', flex: 1 }}
         >
-          <MenuBar menus={menuConfig} style={{ background: 'transparent' }} />
+          <PytronMenuBar menus={menuConfig} style={{ background: 'transparent' }} />
+
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px', paddingRight: '12px' }}>
+            <div
+              onClick={() => setShowSidebar(s => !s)}
+              className={`titlebar-toggle ${showSidebar ? 'active' : ''}`}
+              style={{ padding: '4px', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              title="Toggle Sidebar"
+            >
+              <PanelLeft size={16} />
+            </div>
+            <div
+              onClick={() => setShowTerminal(s => !s)}
+              className={`titlebar-toggle ${showTerminal ? 'active' : ''}`}
+              style={{ padding: '4px', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              title="Toggle Bottom Panel"
+            >
+              <PanelBottom size={16} />
+            </div>
+            <div
+              onClick={() => setShowAI(s => !s)}
+              className={`titlebar-toggle ${showAI ? 'active' : ''}`}
+              style={{ padding: '4px', cursor: 'pointer', borderRadius: '4px', display: 'flex', gap: '4px', alignItems: 'center', justifyContent: 'center' }}
+              title="Toggle AI Assistant"
+            >
+              <PanelRight size={16} />
+              <Bot size={14} />
+            </div>
+          </div>
         </div>
-      </TitleBar>
+      </PytronTitleBar>
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        <Sidebar
-          onFileOpen={openFile}
-          onOpenSettings={() => setShowSettings(true)}
-          activePath={activePath}
-          onOpenTool={handleOpenTool}
-        />
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+        {showSidebar && (
+          <Sidebar
+            onFileOpen={openFile}
+            onDiffOpen={openDiff}
+            onOpenSettings={() => setShowSettings(true)}
+            activePath={activePath}
+            onOpenTool={handleOpenTool}
+            settings={settings}
+          />
+        )}
+        <div style={{ flex: '1 1 auto', display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
           <TabsBar
             files={openFiles}
             activePath={activePath}
@@ -233,10 +361,14 @@ function MainApp({ currentTheme, onThemeChange }) {
             onClose={closeFile}
             onRun={handleRun}
           />
-          <div style={{ flex: 1, position: 'relative', display: 'flex', minHeight: 0 }}>
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: '300px', overflow: 'hidden' }}>
-                <Suspense fallback={<div style={{ padding: 16, color: theme.fg }}>Loading editor...</div>}>
-                <CodeEditor activePath={activePath} onCursorChange={setCursorInfo} settings={settings} />
+          <div style={{ flex: 1, position: 'relative', display: 'flex', minHeight: 0, overflow: 'hidden' }}>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: '100px', overflow: 'hidden' }}>
+              <Suspense fallback={<div style={{ padding: 16, color: theme.fg }}>Loading editor...</div>}>
+                <CodeEditor
+                  activeFile={openFiles.find(f => f.path === activePath)}
+                  onCursorChange={setCursorInfo}
+                  settings={settings}
+                />
               </Suspense>
             </div>
             {showWebPreview && (
@@ -281,10 +413,32 @@ function MainApp({ currentTheme, onThemeChange }) {
             </div>
           )}
         </div>
+        {showAI && (
+          <div style={{
+            width: sideWidth,
+            minWidth: '250px',
+            position: 'relative',
+            borderLeft: `1px solid ${theme.border}`,
+            background: theme.bg,
+            flexShrink: 0  // Critical for pushing the editor instead of overlaying
+          }}>
+            <ResizeHandle
+              orientation="vertical"
+              onResize={(e) => setSideWidth(Math.max(250, window.innerWidth - e.clientX))}
+              style={{ position: 'absolute', left: '-2px', top: 0, bottom: 0, width: '4px', zIndex: 100, cursor: 'col-resize' }}
+            />
+            <AIPanel
+              activePath={activePath}
+              onClose={() => setShowAI(false)}
+              messages={aiMessages}
+              setMessages={setAiMessages}
+            />
+          </div>
+        )}
       </div>
       <StatusBar cursor={cursorInfo} onToggleTerminal={() => setShowTerminal(s => !s)} />
       {showPalette && <CommandPalette onOpen={(file) => { openFile(file); setShowPalette(false); }} onClose={() => setShowPalette(false)} />}
-        {showSettings && <SettingsModal onClose={() => setShowSettings(false)} settings={settings} onUpdateSettings={setSettings} currentTheme={currentTheme} onThemeChange={onThemeChange} />}
+      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} settings={settings} onUpdateSettings={setSettings} currentTheme={currentTheme} onThemeChange={onThemeChange} />}
     </div>
   );
 }

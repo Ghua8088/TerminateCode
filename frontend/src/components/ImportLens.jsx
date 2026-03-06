@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Package, Download, Check, AlertCircle, Box } from 'lucide-react';
 import pytron from 'pytron-client';
-import { useToast } from 'pytron-ui';
+import { useToast } from 'pytron-ui/react';
 
 const ImportLens = ({ activePath, onClose }) => {
     const [imports, setImports] = useState([]);

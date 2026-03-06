@@ -1,74 +1,71 @@
 import React, { useState, useEffect } from 'react';
-import { Terminal, GitBranch, RefreshCw, XCircle, AlertTriangle } from 'lucide-react';
-import { useTheme } from 'pytron-ui';
+import { Terminal, GitBranch, CheckCircle2 } from 'lucide-react';
 import pytron from 'pytron-client';
 
 const StatusBar = ({ cursor = { line: 1, column: 1 }, onToggleTerminal }) => {
-  const theme = useTheme();
-  const [gitBranch, setGitBranch] = useState('');
-  
+  const [gitBranch, setGitBranch] = useState('main');
+  const [projectName, setProjectName] = useState('TerminateCode');
+
   useEffect(() => {
-    const loadGitStatus = async () => {
+    const loadInfo = async () => {
       try {
         const res = await pytron.get_git_status('.');
-        if (res.success) {
-          let hasStaged = false;
-          let hasModified = false;
-          res.changes.forEach(c => {
-             // Status is 2 chars. 1st is index, 2nd is work tree.
-             // ?? is untracked.
-             const s = c.status;
-             if (s === '??') {
-                 hasModified = true;
-             } else {
-                 if (s[0] && s[0] !== ' ' && s[0] !== '?') hasStaged = true;
-                 if (s[1] && s[1] !== ' ' && s[1] !== '?') hasModified = true;
-             }
-          });
-          
-          let suffix = '';
-          if (hasModified) suffix += '*';
-          if (hasStaged) suffix += '+';
-          
-          setGitBranch((res.branch || '') + suffix);
+        if (res.success) setGitBranch(res.branch || 'main');
+
+        // Simple way to get project name from CWD
+        const sysRes = await pytron.get_system_info();
+        if (sysRes.success && sysRes.cwd) {
+          const name = sysRes.cwd.split(/[\\/]/).pop();
+          setProjectName(name || 'Workspace');
         }
-      } catch (err) {
-        console.error(err);
-      }
+      } catch (err) { }
     };
-    loadGitStatus();
-    const interval = setInterval(loadGitStatus, 5000);
-    return () => clearInterval(interval);
+    loadInfo();
   }, []);
 
   return (
-    <div style={{ height: '24px', background: theme.secondary, borderTop: `1px solid ${theme.border}`, display: 'flex', alignItems: 'center', padding: '0 12px', color: theme.fg, fontSize: '12px', justifyContent: 'space-between' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-        <div style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }} title="Git Branch">
+    <div style={{
+      height: '24px',
+      background: 'var(--accent)',
+      display: 'flex',
+      alignItems: 'center',
+      padding: '0 12px',
+      color: '#fff',
+      fontSize: '11px',
+      fontWeight: '600',
+      justifyContent: 'space-between',
+      letterSpacing: '0.02em',
+      userSelect: 'none'
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        <div style={{ padding: '0 8px', background: 'rgba(255,255,255,0.1)', height: '100%', display: 'flex', alignItems: 'center', fontWeight: '800' }}>
+          {projectName.toUpperCase()}
+        </div>
+        <div style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', opacity: 0.8 }} title="Git Branch">
           <GitBranch size={12} />
           <span>{gitBranch}</span>
         </div>
-        <div style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }} title="Sync Changes">
-           <RefreshCw size={12} />
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginLeft: '4px' }} title="No Errors">
-           <XCircle size={12} /> 0
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }} title="No Warnings">
-           <AlertTriangle size={12} /> 0
-        </div>
-        <div style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', marginLeft: '8px' }} onClick={onToggleTerminal}>
-          <Terminal size={12} style={{ marginRight: '4px' }} />
-          <span>Terminal</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', opacity: 0.8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <div style={{ width: '6px', height: '6px', background: '#4caf50', borderRadius: '50%' }} />
+            <span>Connected</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }} onClick={onToggleTerminal}>
+            <Terminal size={12} />
+            <span>Terminal</span>
+          </div>
         </div>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center' }}>
-        <div style={{ marginRight: '16px' }}>Ln {cursor.line}, Col {cursor.column}</div>
-        <div style={{ marginRight: '16px' }}>|</div>
-        <div>UTF-8</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+        <div style={{ opacity: 0.9 }}>Line {cursor.line}, Column {cursor.column}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span>UTF-8</span>
+          <div style={{ width: '8px', height: '8px', background: '#fff', borderRadius: '50%', boxShadow: '0 0 8px rgba(255,255,255,0.5)' }} />
+        </div>
       </div>
     </div>
   );
 };
 
 export default StatusBar;
+

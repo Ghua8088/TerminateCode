@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { RefreshCw, ExternalLink, X, Zap, ZapOff } from 'lucide-react';
 import pytron from 'pytron-client';
-import { useToast } from 'pytron-ui';
+import { useToast } from 'pytron-ui/react';
 
 const WebPreview = ({ onClose }) => {
     const [url, setUrl] = useState('http://localhost:5173'); // Default to Vite port

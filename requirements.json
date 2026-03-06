@@ -1,6 +1,21 @@
 {
     "dependencies": [
         "black",
-        "pytron-kit"
-    ]
+        "google-auth>=2.20.0",
+        "google-cloud-aiplatform>=1.26.0",
+        "google-genai",
+        "google-search-results",
+        "keyring>=23.0.0",
+        "langchain",
+        "langchain-anthropic",
+        "langchain-community",
+        "langchain-core",
+        "langchain-google-genai",
+        "langchain-openai",
+        "llama-cpp-python",
+        "pytron-kit==0.3.14.post2",
+        "pywinpty==3.0.3",
+        "requests==2.32.5"
+    ],
+    "plugins": []
 }

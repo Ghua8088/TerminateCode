@@ -1,13 +1,19 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import Editor from '@monaco-editor/react';
 import pytron from 'pytron-client';
-import { BookOpen, Code } from 'lucide-react';
+import { BookOpen, Code, ChevronRight } from 'lucide-react';
 import MarkdownPreview from './MarkdownPreview';
-import { useToast } from 'pytron-ui';
+import ImageViewer from './ImageViewer';
+import { useToast } from 'pytron-ui/react';
+import GitDiffViewer from './GitDiffViewer';
 
-const CodeEditor = ({ activePath, onCursorChange, settings = {} }) => {
+const CodeEditor = ({ activeFile, onCursorChange, settings = {} }) => {
+  const isDiff = activeFile?.type === 'diff' || activeFile?.path?.startsWith('diff:');
+  const activePath = isDiff ? activeFile.path.substring(5) : activeFile?.path;
+
   const { fontSize = 14, wordWrap = 'off', minimap = false, theme = 'vs-dark' } = settings;
   const [codeMap, setCodeMap] = useState({});
+  const [binaryDataMap, setBinaryDataMap] = useState({}); // Stores base64
   const [languageMap, setLanguageMap] = useState({});
   const [isDirtyMap, setIsDirtyMap] = useState({});
   const [showPreview, setShowPreview] = useState(false);
@@ -15,36 +21,47 @@ const CodeEditor = ({ activePath, onCursorChange, settings = {} }) => {
   const { addToast } = useToast();
 
   useEffect(() => {
+    if (isDiff) return; // Don't try to load content for diff special tabs
     const loadContent = async (path) => {
       if (!path) return;
       try {
-        const res = await pytron.read_file_content(path);
-        if (res.success) {
-          setCodeMap((m) => ({ ...m, [path]: res.content }));
-          // detect language from ext
-          const name = path.split(/[\\/]/).pop();
-          const ext = (name || '').split('.').pop();
-          const langMap = {
-            'js': 'javascript', 'jsx': 'javascript', 'ts': 'typescript', 'tsx': 'typescript',
-            'py': 'python', 'html': 'html', 'css': 'css', 'json': 'json', 'md': 'markdown'
-          };
-          setLanguageMap((m) => ({ ...m, [path]: langMap[ext] || 'plaintext' }));
-          setIsDirtyMap((m) => ({ ...m, [path]: false }));
+        const name = path.split(/[\\/]/).pop();
+        const ext = (name || '').split('.').pop().toLowerCase();
+        const isImage = ['png', 'jpg', 'jpeg', 'gif', 'svg', 'ico', 'webp'].includes(ext);
+
+        if (isImage) {
+          const res = await pytron.read_file_base64(path);
+          if (res.success) {
+            setBinaryDataMap(m => ({ ...m, [path]: res.content }));
+            setLanguageMap(m => ({ ...m, [path]: 'image' }));
+          }
         } else {
-          setCodeMap((m) => ({ ...m, [path]: `// Error reading file: ${res.error}` }));
+          const res = await pytron.read_file_content(path);
+          if (res.success) {
+            setCodeMap((m) => ({ ...m, [path]: res.content }));
+            // detect language from ext
+            const langMap = {
+              'js': 'javascript', 'jsx': 'javascript', 'ts': 'typescript', 'tsx': 'typescript',
+              'py': 'python', 'html': 'html', 'css': 'css', 'json': 'json', 'md': 'markdown'
+            };
+            setLanguageMap((m) => ({ ...m, [path]: langMap[ext] || 'plaintext' }));
+            setIsDirtyMap((m) => ({ ...m, [path]: false }));
+          } else {
+            setCodeMap((m) => ({ ...m, [path]: `// Error reading file: ${res.error}` }));
+          }
         }
       } catch (err) {
         setCodeMap((m) => ({ ...m, [path]: `// Error: ${err}` }));
       }
     };
 
-    if (activePath && !codeMap[activePath]) {
+    if (activePath && !codeMap[activePath] && !binaryDataMap[activePath]) {
       loadContent(activePath);
     }
-  }, [activePath, codeMap]);
+  }, [activePath, codeMap, isDiff]);
 
   const handleSave = useCallback(async () => {
-    if (!activePath) return;
+    if (!activePath || isDiff) return;
     const content = codeMap[activePath] || '';
     try {
       const res = await pytron.save_file_content(activePath, content);
@@ -57,7 +74,7 @@ const CodeEditor = ({ activePath, onCursorChange, settings = {} }) => {
     } catch (err) {
       addToast('Error: ' + err, { type: 'error' });
     }
-  }, [activePath, codeMap, addToast]);
+  }, [activePath, codeMap, addToast, isDiff]);
 
   // Keyboard shortcut for save
   useEffect(() => {
@@ -87,28 +104,47 @@ const CodeEditor = ({ activePath, onCursorChange, settings = {} }) => {
     );
   }
 
+  if (isDiff) {
+    return <GitDiffViewer path={activePath} settings={settings} />;
+  }
+
   const code = codeMap[activePath] ?? '// Loading...';
   const language = languageMap[activePath] ?? 'plaintext';
   const isDirty = !!isDirtyMap[activePath];
-  const name = activePath.split(/[\\/]/).pop();
   const isMarkdown = language === 'markdown';
 
+  // Breadcrumbs logic
+  const pathParts = activePath ? activePath.split(/[\\/]/) : [];
+  const breadcrumbs = pathParts.length > 3 ? ['...', ...pathParts.slice(-3)] : pathParts;
+
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, background: '#1e1e1e' }}>
       <div style={{
         height: '35px',
-        background: '#1e1e1e',
+        background: '#1a1a1a',
         display: 'flex',
         alignItems: 'center',
-        padding: '0 16px',
-        fontSize: '13px',
-        borderBottom: '1px solid #333',
-        flexShrink: 0
+        padding: '0 12px',
+        fontSize: '12px',
+        borderBottom: '1px solid #282828',
+        flexShrink: 0,
+        userSelect: 'none'
       }}>
-        <span style={{ color: '#fff' }}>{name}</span>
-        {isDirty && <span style={{ marginLeft: '8px', width: '8px', height: '8px', borderRadius: '50%', background: '#fff' }}></span>}
+        <div style={{ display: 'flex', alignItems: 'center', color: '#888', flex: 1, overflow: 'hidden' }}>
+          {breadcrumbs.map((part, i) => (
+            <React.Fragment key={i}>
+              <span style={{
+                color: i === breadcrumbs.length - 1 ? '#ccc' : '#666',
+                fontWeight: i === breadcrumbs.length - 1 ? '600' : '400',
+                whiteSpace: 'nowrap'
+              }}>{part}</span>
+              {i < breadcrumbs.length - 1 && <ChevronRight size={12} style={{ margin: '0 4px', opacity: 0.5 }} />}
+            </React.Fragment>
+          ))}
+          {isDirty && <div style={{ marginLeft: '10px', width: '6px', height: '6px', borderRadius: '50%', background: '#4fc1ff' }}></div>}
+        </div>
 
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '15px' }}>
           {isMarkdown && (
             <div
               onClick={() => setShowPreview(!showPreview)}
@@ -118,11 +154,11 @@ const CodeEditor = ({ activePath, onCursorChange, settings = {} }) => {
               {showPreview ? <Code size={14} /> : <BookOpen size={14} />}
             </div>
           )}
-          <div style={{ color: '#888', fontSize: '12px' }}>{language}</div>
+          <div style={{ color: '#555', fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase' }}>{language}</div>
         </div>
       </div>
       <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ flex: 1, minWidth: 0, display: language === 'image' ? 'none' : 'flex' }}>
           <Editor
             height="100%"
             defaultLanguage={language}
@@ -143,6 +179,11 @@ const CodeEditor = ({ activePath, onCursorChange, settings = {} }) => {
             }}
           />
         </div>
+
+        {language === 'image' && binaryDataMap[activePath] && (
+          <ImageViewer path={activePath} data={binaryDataMap[activePath]} />
+        )}
+
         {isMarkdown && showPreview && (
           <div style={{ flex: 1, borderLeft: '1px solid #333', minWidth: 0 }}>
             <MarkdownPreview content={code} />
