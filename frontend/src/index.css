@@ -21,6 +21,7 @@
 }
 
 body {
+  border-radius: 20px;
   margin: 0;
   background-color: var(--bg);
   color: var(--fg);

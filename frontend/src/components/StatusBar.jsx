@@ -2,26 +2,36 @@ import React, { useState, useEffect } from 'react';
 import { Terminal, GitBranch, CheckCircle2 } from 'lucide-react';
 import pytron from 'pytron-client';
 
-const StatusBar = ({ cursor = { line: 1, column: 1 }, onToggleTerminal }) => {
+const StatusBar = ({ cursor = { line: 1, column: 1 }, onToggleTerminal, projectPath }) => {
   const [gitBranch, setGitBranch] = useState('main');
   const [projectName, setProjectName] = useState('TerminateCode');
+  const [memory, setMemory] = useState(0);
 
   useEffect(() => {
     const loadInfo = async () => {
       try {
-        const res = await pytron.get_git_status('.');
+        const path = projectPath || '.';
+        const res = await pytron.get_git_status(path);
         if (res.success) setGitBranch(res.branch || 'main');
 
-        // Simple way to get project name from CWD
-        const sysRes = await pytron.get_system_info();
-        if (sysRes.success && sysRes.cwd) {
-          const name = sysRes.cwd.split(/[\\/]/).pop();
-          setProjectName(name || 'Workspace');
+        // Extract folder name from path or fallback to system cwd
+        if (projectPath) {
+          setProjectName(projectPath.split(/[\\/]/).pop() || 'Workspace');
+        } else {
+          const sysRes = await pytron.get_system_info();
+          if (sysRes.success && sysRes.cwd) {
+            setProjectName(sysRes.cwd.split(/[\\/]/).pop() || 'Workspace');
+          }
         }
+
+        const health = await pytron.get_system_health();
+        if (health.success) setMemory(Math.round(health.memory_usage));
       } catch (err) { }
     };
     loadInfo();
-  }, []);
+    const interval = setInterval(loadInfo, 10000); // 10s refresh
+    return () => clearInterval(interval);
+  }, [projectPath]);
 
   return (
     <div style={{
@@ -57,6 +67,7 @@ const StatusBar = ({ cursor = { line: 1, column: 1 }, onToggleTerminal }) => {
         </div>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+        {memory > 0 && <div style={{ opacity: 0.7 }}>{memory} MB RAM</div>}
         <div style={{ opacity: 0.9 }}>Line {cursor.line}, Column {cursor.column}</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span>UTF-8</span>

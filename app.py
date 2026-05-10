@@ -14,9 +14,38 @@ from backend.api.ai import register_ai_routes
 from backend.api.settings import register_settings_routes
 from backend.api.system import register_system_routes
 from backend.api.workspace import register_workspace_routes
+from backend.api.architecture import register_architecture_routes
+from backend.api.semantic import register_semantic_routes
+from backend.api.cli_tools import register_cli_routes
+
+def setup_log_capture(app):
+    class LogCatcher:
+        def __init__(self, stream, stream_name):
+            self.stream = stream
+            self.stream_name = stream_name
+
+        def write(self, data):
+            if self.stream is not None:
+                self.stream.write(data)
+            if data and isinstance(data, str):
+                try:
+                    color = '\x1b[36m' if self.stream_name == 'stdout' else '\x1b[31m'
+                    app.dispatch('debug:log', {'data': f"{color}{data}\x1b[0m"})
+                except Exception:
+                    pass
+
+        def flush(self):
+            if self.stream is not None:
+                self.stream.flush()
+
+    if sys.stdout is not None:
+        sys.stdout = LogCatcher(sys.stdout, 'stdout')
+    if sys.stderr is not None:
+        sys.stderr = LogCatcher(sys.stderr, 'stderr')
 
 def main():
     app = App()
+    setup_log_capture(app)
 
     # Register all API routes
     register_filesystem_routes(app)
@@ -28,6 +57,9 @@ def main():
     register_settings_routes(app)
     register_system_routes(app)
     register_workspace_routes(app)
+    register_architecture_routes(app)
+    register_semantic_routes(app)
+    register_cli_routes(app)
 
     # Start the app
     app.run()

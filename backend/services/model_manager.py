@@ -4,7 +4,51 @@ import requests
 from typing import List, Dict, Any, Optional
 from langchain_core.language_models import BaseChatModel
 
+# Try to import necessary libraries, handle failures gracefully
+try:
+    from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
+    GOOGLE_AVAILABLE = True
+except ImportError:
+    GOOGLE_AVAILABLE = False
 
+try:
+    from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+    OPENAI_AVAILABLE = True
+except ImportError:
+    OPENAI_AVAILABLE = False
+
+try:
+    from langchain_anthropic import ChatAnthropic
+    ANTHROPIC_AVAILABLE = True
+except ImportError:
+    ANTHROPIC_AVAILABLE = False
+
+try:
+    from langchain_community.chat_models import ChatLlamaCpp
+    LLAMACPP_AVAILABLE = True
+except ImportError:
+    # Fix for bundled apps: llama-cpp-python might fail to find its DLLs
+    try:
+        if getattr(sys, 'frozen', False):
+            bundle_dir = getattr(sys, '_MEIPASS', os.path.abspath(os.path.dirname(sys.executable)))
+            # Try common locations in bundled app
+            possible_lib_dirs = [
+                os.path.join(bundle_dir, "_internal", "llama_cpp", "lib"),
+                os.path.join(bundle_dir, "llama_cpp", "lib"),
+                os.path.join(bundle_dir, "_internal", "llama_cpp"),
+                os.path.join(bundle_dir, "llama_cpp"),
+            ]
+            for lib_dir in possible_lib_dirs:
+                dll_path = os.path.join(lib_dir, "llama.dll")
+                if os.path.exists(dll_path):
+                    os.environ["LLAMA_CPP_LIB"] = dll_path
+                    print(f"Found bundled llama.dll at: {dll_path}")
+                    break
+        from langchain_community.chat_models import ChatLlamaCpp
+        LLAMACPP_AVAILABLE = True
+    except Exception as e:
+        print(f"LlamaCpp still not available after bundle fix: {e}")
+        LLAMACPP_AVAILABLE = False
 
 # Import keyring for secure storage access (same as settings.py)
 try:
@@ -12,48 +56,65 @@ try:
 except ImportError:
     keyring = None
 
-# Internal key storage to ensure immediate sync
-API_KEYS = {
+_KEYRING_SERVICE = "TerminateCode"
+_KEYRING_USER_GOOGLE = "google_api_key"
+_KEYRING_USER_OPENAI = "openai_api_key"
+_KEYRING_USER_ANTHROPIC = "anthropic_api_key"
+_KEYRING_USER_MISTRAL = "mistral_api_key"
+
+# In-memory storage for API keys (fallback)
+_server_api_keys = {
     "google": None,
     "openai": None,
     "anthropic": None,
     "mistral": None
 }
 
-def set_api_key_in_manager(provider: str, key: str):
-    """Update a key in the manager's memory."""
-    if provider in API_KEYS:
-        API_KEYS[provider] = key
+# Cache for available models to speed up UI
+_available_models_cache = {
+    "local": [],
+    "cloud": [],
+    "last_updated": 0
+}
+CACHE_TTL = 300  # 5 minutes
 
 def get_api_key(provider: str) -> Optional[str]:
-    """Retrieve API key for a specific provider with multi-level lookup."""
-    # 1. Local memory (for immediate sync after updates)
-    if API_KEYS.get(provider):
-        return API_KEYS[provider]
-        
-    # 2. Environment variable
+    """Retrieve API key for a specific provider."""
+    key_map = {
+        "google": _KEYRING_USER_GOOGLE,
+        "openai": _KEYRING_USER_OPENAI,
+        "anthropic": _KEYRING_USER_ANTHROPIC,
+        "mistral": _KEYRING_USER_MISTRAL
+    }
+    
+    # Check environment variable first
     env_key = os.getenv(f"{provider.upper()}_API_KEY")
     if env_key:
         return env_key
 
-    # 3. Secure Keyring (Persistent across restarts)
+    # Check keyring
     if keyring is not None:
         try:
-            # Re-fetch from keyring directly to ensure we have latest
-            key_map = {
-                "google": "google_api_key",
-                "openai": "openai_api_key",
-                "anthropic": "anthropic_api_key",
-                "mistral": "mistral_api_key"
-            }
-            stored = keyring.get_password("TerminateCode", key_map.get(provider, ""))
+            stored = keyring.get_password(_KEYRING_SERVICE, key_map.get(provider, ""))
             if stored:
-                API_KEYS[provider] = stored # Cache it
                 return stored
         except Exception:
             pass
             
-    return None
+    # Check in-memory fallback
+    return _server_api_keys.get(provider)
+
+def set_api_key_in_manager(provider: str, api_key: Optional[str]):
+    """Update the in-memory API key for a provider."""
+    if provider in _server_api_keys:
+        _server_api_keys[provider] = api_key
+        # Clear cache for this provider's models if necessary
+        global _loaded_models_cache
+        keys_to_remove = [k for k in _loaded_models_cache if k.startswith(provider) or (provider == "google" and k.startswith("gemini"))]
+        for k in keys_to_remove:
+            del _loaded_models_cache[k]
+        return True
+    return False
 
 _loaded_models_cache = {}
 MAX_CACHED_MODELS = 2
@@ -76,78 +137,78 @@ def _manage_cache(new_key, model_instance):
         _loaded_models_cache[new_key] = model_instance
 
 def get_available_models() -> List[str]:
-    models = []
-    # 1. Local GGUF models
+    import time
+    global _available_models_cache
+    
+    # 1. Local GGUF models - always fresh as it's fast
+    local_models = []
     try:
-        # For TerminateCode, we'll check a 'models' folder in the current workspace
-        models_dir = os.path.join(os.getcwd(), "models")
-        if os.path.exists(models_dir):
-            for f in os.listdir(models_dir):
-                if f.endswith(('.gguf', '.bin')):
-                    if f not in models: models.append(f)
+        global_models_dir = os.path.join(os.path.expanduser("~"), ".terminatecode", "models")
+        local_models_dir = os.path.join(os.getcwd(), "models")
+        
+        for search_dir in [global_models_dir, local_models_dir]:
+            if os.path.exists(search_dir):
+                for f in os.listdir(search_dir):
+                    if f.endswith(('.gguf', '.bin')):
+                        if f not in local_models: local_models.append(f)
     except: pass
-
-
     
-    # Custom Providers (e.g. LiteLLM or other OpenAI-compatible proxies)
-    # This section is kept for future expansion if you add a CUSTOM_PROVIDERS config
+    _available_models_cache["local"] = local_models
+
+    # 2. Cloud models - use cache if fresh
+    now = time.time()
+    if now - _available_models_cache["last_updated"] < CACHE_TTL and _available_models_cache["cloud"]:
+        return local_models + _available_models_cache["cloud"]
+
+    cloud_models = []
     
-    # 3. Standard Cloud Models
-    def is_valid_key(k): return k and len(k) > 10 and not k.startswith("YOUR_")
+    def is_valid_key(k): 
+        if not k: return False
+        k_str = str(k).strip()
+        return len(k_str) > 5 and not k_str.startswith("YOUR_")
 
     # Google Gemini
-    gemini_key = get_api_key("google")
-    if is_valid_key(gemini_key):
-        try:
-            resp = requests.get(f"https://generativelanguage.googleapis.com/v1beta/models?key={gemini_key}", timeout=5)
-            if resp.status_code == 200:
-                for m in resp.json().get('models', []):
-                    if 'generateContent' in m.get('supportedGenerationMethods', []):
-                        name = m.get('name', '').replace('models/', '')
-                        if name not in models: models.append(name)
-        except:
-            for m in ["gemini-2.0-flash", "gemini-2.0-pro-exp-02-05", "gemini-1.5-flash", "gemini-1.5-pro"]:
-                if m not in models: models.append(m)
+    try:
+        gemini_key = get_api_key("google")
+        if is_valid_key(gemini_key):
+            import google.generativeai as genai
+            genai.configure(api_key=gemini_key)
+            # Use a shorter timeout if possible or just handle exception
+            for m in genai.list_models():
+                if 'generateContent' in m.supported_generation_methods:
+                    name = m.name.replace('models/', '')
+                    if name not in cloud_models: cloud_models.append(name)
+        else:
+            for m in ["gemini-2.0-flash", "gemini-1.5-flash"]:
+                if m not in cloud_models: cloud_models.append(m)
+    except Exception as e:
+        print(f"Gemini model list failed: {e}")
+        for m in ["gemini-2.0-flash", "gemini-1.5-flash"]:
+            if m not in cloud_models: cloud_models.append(m)
 
     # OpenAI
-    openai_key = get_api_key("openai")
-    if is_valid_key(openai_key):
-        try:
-            resp = requests.get("https://api.openai.com/v1/models", headers={"Authorization": f"Bearer {openai_key}"}, timeout=5)
+    try:
+        openai_key = get_api_key("openai")
+        if is_valid_key(openai_key):
+            resp = requests.get("https://api.openai.com/v1/models", headers={"Authorization": f"Bearer {openai_key}"}, timeout=3)
             if resp.status_code == 200:
                 for m in resp.json().get('data', []):
                     mid = m.get('id')
-                    if mid.startswith(('gpt-', 'o1-', 'o3-')) and mid not in models: models.append(mid)
-        except:
-             for m in ["gpt-4o", "gpt-4o-mini"]:
-                if m not in models: models.append(m)
+                    if mid.startswith(('gpt-', 'o1-', 'o3-')) and mid not in cloud_models: cloud_models.append(mid)
+            else:
+                for m in ["gpt-4o", "gpt-4o-mini"]:
+                    if m not in cloud_models: cloud_models.append(m)
+    except Exception as e:
+        print(f"OpenAI model list failed: {e}")
 
     # Anthropic
-    anthropic_key = get_api_key("anthropic")
-    if is_valid_key(anthropic_key):
-        for m in ["claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022", "claude-3-opus-20240229"]:
-            if m not in models: models.append(m)
+    for m in ["claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022", "claude-3-opus-20240229"]:
+        if m not in cloud_models: cloud_models.append(m)
             
-    return models
-
-def get_embeddings_instance(provider: str = "google"):
-    """Get an embedding model instance for vectorization."""
-    try:
-        if provider == "google":
-            from langchain_google_genai import GoogleGenerativeAIEmbeddings
-            key = get_api_key("google")
-            if not key: return None
-            return GoogleGenerativeAIEmbeddings(model="models/text-embedding-004", google_api_key=key)
-            
-        elif provider == "openai":
-            from langchain_openai import OpenAIEmbeddings
-            key = get_api_key("openai")
-            if not key: return None
-            return OpenAIEmbeddings(model="text-embedding-3-small", api_key=key)
-            
-    except Exception as e:
-        print(f"Error loading {provider} embeddings: {e}")
-    return None
+    _available_models_cache["cloud"] = cloud_models
+    _available_models_cache["last_updated"] = now
+    
+    return local_models + cloud_models
 
 def get_model_instance(model_name: str, temperature: float = 0.7) -> BaseChatModel:
     global current_model_name, _loaded_models_cache
@@ -162,43 +223,57 @@ def get_model_instance(model_name: str, temperature: float = 0.7) -> BaseChatMod
     
     try:
         if model_name.startswith("gemini"):
-            from langchain_google_genai import ChatGoogleGenerativeAI
+            if not GOOGLE_AVAILABLE:
+                raise ImportError("langchain-google-genai not installed")
             key = get_api_key("google")
             if not key:
                 raise ValueError("Google API Key not found")
-            model = ChatGoogleGenerativeAI(model=model_name, google_api_key=key, temperature=temperature, streaming=True)
+            model = ChatGoogleGenerativeAI(model=model_name, google_api_key=key, temperature=temperature)
             
         elif model_name.startswith(("gpt-", "o1-")):
-            from langchain_openai import ChatOpenAI
+            if not OPENAI_AVAILABLE:
+                raise ImportError("langchain-openai not installed")
             key = get_api_key("openai")
             if not key:
                 raise ValueError("OpenAI API Key not found")
-            model = ChatOpenAI(model=model_name, api_key=key, temperature=temperature, streaming=True)
+            model = ChatOpenAI(model=model_name, api_key=key, temperature=temperature)
             
         elif model_name.startswith("claude-"):
-            from langchain_anthropic import ChatAnthropic
+            if not ANTHROPIC_AVAILABLE:
+                raise ImportError("langchain-anthropic not installed")
             key = get_api_key("anthropic")
             if not key:
                 raise ValueError("Anthropic API Key not found")
             model = ChatAnthropic(model=model_name, anthropic_api_key=key, temperature=temperature)
             
         elif model_name.endswith(('.gguf', '.bin')):
-            from langchain_community.chat_models import ChatLlamaCpp
+            if not LLAMACPP_AVAILABLE:
+                raise ImportError("llama-cpp-python or langchain-community not installed")
             
-            # Locate the model file
-            root_dir = os.getcwd()
-            model_path = os.path.join(root_dir, "models", model_name)
+            # Locate the model file (check global first, then local)
+            global_path = os.path.join(os.path.expanduser("~"), ".terminatecode", "models", model_name)
+            local_path = os.path.join(os.getcwd(), "models", model_name)
+            
+            model_path = global_path if os.path.exists(global_path) else local_path
+            
             if not os.path.exists(model_path):
-                 raise FileNotFoundError(f"Model file not found: {model_path}")
+                 raise FileNotFoundError(f"Model file not found: {model_name} (checked global and local)")
             
-            # LlamaCpp specific parameters
+            # LlamaCpp specific parameters for speed optimization
+            import multiprocessing
+            threads = max(1, multiprocessing.cpu_count() - 2)
+            
             model = ChatLlamaCpp(
                 model_path=model_path,
                 temperature=temperature,
                 n_ctx=4096,
-                max_tokens=2000,
-                n_gpu_layers=-1, # Try to use all layers on GPU if available
-                verbose=True
+                max_tokens=2048,
+                n_batch=512,       # Faster prompt processing
+                n_threads=threads, # Use optimal CPU threads
+                n_gpu_layers=-1,   # Try to use all layers on GPU if available
+                f16_kv=True,       # Use half-precision for key-value cache
+                streaming=True,
+                verbose=False      # Less noise in logs
             )
         else:
             raise ValueError(f"Unknown model type: {model_name}")
@@ -210,3 +285,20 @@ def get_model_instance(model_name: str, temperature: float = 0.7) -> BaseChatMod
     except Exception as e:
         print(f"Error loading model {model_name}: {e}")
         raise e
+
+def get_embeddings_instance(provider: str = "google"):
+    """Retrieve an embeddings model instance for the specified provider."""
+    try:
+        if provider == "google":
+            if not GOOGLE_AVAILABLE: return None
+            key = get_api_key("google")
+            if not key: return None
+            return GoogleGenerativeAIEmbeddings(model="models/embedding-001", google_api_key=key)
+        elif provider == "openai":
+            if not OPENAI_AVAILABLE: return None
+            key = get_api_key("openai")
+            if not key: return None
+            return OpenAIEmbeddings(api_key=key)
+    except Exception as e:
+        print(f"Error creating embedding instance: {e}")
+    return None

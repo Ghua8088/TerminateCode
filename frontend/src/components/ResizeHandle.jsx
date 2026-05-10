@@ -6,7 +6,9 @@ const ResizeHandle = ({ onResize, orientation = 'vertical', style }) => {
   useEffect(() => {
     const handleMouseMove = (e) => {
       if (!isResizing) return;
-      onResize(e);
+      window.requestAnimationFrame(() => {
+        onResize(e);
+      });
     };
     const handleMouseUp = () => {
       setIsResizing(false);

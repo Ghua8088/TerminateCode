@@ -5,6 +5,26 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>frontend</title>
+    <script>
+      const resizeObserverMessages = [
+        'ResizeObserver loop completed with undelivered notifications.',
+        'ResizeObserver loop limit exceeded',
+      ];
+      window.addEventListener('error', (event) => {
+        if (resizeObserverMessages.some(msg => event?.message?.includes(msg))) {
+          event.stopImmediatePropagation();
+          event.preventDefault();
+        }
+      });
+      const originalConsoleError = console.error;
+      console.error = (...args) => {
+        const message = args[0]?.message || args[0] || '';
+        if (typeof message === 'string' && resizeObserverMessages.some(msg => message.includes(msg))) {
+          return;
+        }
+        originalConsoleError(...args);
+      };
+    </script>
   </head>
   <body>
     <div id="root"></div>
