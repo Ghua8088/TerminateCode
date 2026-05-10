@@ -3,7 +3,14 @@ import json
 import datetime
 import numpy as np
 from typing import List, Dict, Any, Optional
-from backend.services.model_manager import get_embeddings_instance
+# Dynamic import for embeddings to prevent circular dependencies
+def _get_embedding_fn():
+    try:
+        from backend.services.model_manager import get_embeddings_instance
+        return get_embeddings_instance()
+    except Exception as e:
+        print(f"Embedding initialization delayed: {e}")
+        return None
 
 # Simple JSON-based vector memory (Lite version)
 MEMORY_DIR = os.path.join(os.path.expanduser("~"), ".terminatecode", "memory")
@@ -61,7 +68,7 @@ class MemoryManager:
         
         # Try to generate embedding
         try:
-            embed_svc = get_embeddings_instance()
+            embed_svc = _get_embedding_fn()
             if embed_svc:
                 vector = embed_svc.embed_query(text)
                 if vector:
@@ -81,7 +88,7 @@ class MemoryManager:
         
         # 1. Semantic Search (Vector)
         try:
-            embed_svc = get_embeddings_instance()
+            embed_svc = _get_embedding_fn()
             if embed_svc:
                 query_vector = embed_svc.embed_query(query)
                 scored = []

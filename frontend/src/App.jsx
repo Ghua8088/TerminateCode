@@ -1,23 +1,28 @@
 import React, { useState, useCallback, useEffect, Suspense } from 'react';
 
 import Sidebar from './components/Sidebar';
-import { Layout, PanelLeft, PanelBottom, PanelRight, Bot } from 'lucide-react';
+import { Layout, PanelLeft, PanelBottom, PanelRight, Bot, Compass, FolderOpen, Trash2, Settings as SettingsIcon, RefreshCcw, Layers, Package, LayoutGrid } from 'lucide-react';
 const CodeEditor = React.lazy(() => import('./components/Editor'));
+const NotebookEditor = React.lazy(() => import('./components/NotebookEditor'));
 import TabsBar from './components/TabsBar';
 import StatusBar from './components/StatusBar';
 import CommandPalette from './components/CommandPalette';
-import WebPreview from './components/WebPreview';
-import RegexLab from './components/RegexLab';
-import CodeMetrics from './components/CodeMetrics';
-import ImportLens from './components/ImportLens';
-import BytecodeViewer from './components/BytecodeViewer';
-import MarkdownPreview from './components/MarkdownPreview';
-import AIPanel from './components/AIPanel';
+const WebPreview = React.lazy(() => import('./components/WebPreview'));
+const RegexLab = React.lazy(() => import('./components/RegexLab'));
+const CodeMetrics = React.lazy(() => import('./components/CodeMetrics'));
+const ImportLens = React.lazy(() => import('./components/ImportLens'));
+const BytecodeViewer = React.lazy(() => import('./components/BytecodeViewer'));
+const MarkdownPreview = React.lazy(() => import('./components/MarkdownPreview'));
+const AIPanel = React.lazy(() => import('./components/AIPanel'));
+const AgentLab = React.lazy(() => import('./components/AgentLab'));
+const ConceptBoard = React.lazy(() => import('./components/ConceptBoard'));
+const ExtensionStore = React.lazy(() => import('./components/ExtensionStore'));
 import './App.css';
-import { PytronTitleBar, PytronMenuBar, ToastProvider, useToast } from 'pytron-ui/react';
+import { PytronTitleBar, PytronMenuBar, ToastProvider, useToast, ContextMenu } from 'pytron-ui/react';
 import pytron from 'pytron-client';
-import TerminalPanel from './components/TerminalPanel';
-import SettingsModal from './components/SettingsModal';
+const TerminalPanel = React.lazy(() => import('./components/TerminalPanel'));
+const SettingsModal = React.lazy(() => import('./components/SettingsModal'));
+import Breadcrumbs from './components/Breadcrumbs';
 import { useTheme } from 'pytron-ui/react';
 import ResizeHandle from './components/ResizeHandle';
 
@@ -30,20 +35,54 @@ function MainApp({ currentTheme, onThemeChange }) {
   const [showTerminal, setShowTerminal] = useState(true);
   const [pendingCommand, setPendingCommand] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
-  const [settings, setSettings] = useState({ fontSize: 14, wordWrap: 'off', minimap: false, theme: 'vs-dark' });
+  const [settings, setSettings] = useState({
+    fontSize: 14,
+    wordWrap: 'off',
+    minimap: false,
+    theme: 'vs-dark',
+    customEndpoint: '',
+    customModel: ''
+  });
   const [showWebPreview, setShowWebPreview] = useState(false);
   const [showRegexLab, setShowRegexLab] = useState(false);
   const [showMetrics, setShowMetrics] = useState(false);
   const [showImports, setShowImports] = useState(false);
   const [showBytecode, setShowBytecode] = useState(false);
+  const [showAgentLab, setShowAgentLab] = useState(false);
   const [showAI, setShowAI] = useState(false);
   const [aiMessages, setAiMessages] = useState([]);
   const [terminalHeight, setTerminalHeight] = useState(250);
   const [toolWidth, setToolWidth] = useState(300);
-  const [sideWidth, setSideWidth] = useState(350);
+  const [aiWidth, setAiWidth] = useState(380);
+  const [projectPath, setProjectPath] = useState(null);
+  const [showExtensions, setShowExtensions] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [architectureSidebarState, setArchitectureSidebarState] = useState(null);
+  
+  const showConceptBoard = activePath === 'pytron://architecture';
+
+  useEffect(() => {
+    if (projectPath) {
+      pytron.sync_backend_cwd(projectPath);
+    }
+  }, [projectPath]);
+
   const { addToast } = useToast();
   const theme = useTheme();
+
+  const handleSelectDirectory = useCallback(async () => {
+    console.log('[App] Requesting directory selection...');
+    try {
+      const res = await pytron.select_directory();
+      console.log('[App] select_directory result:', res);
+      if (res.success) {
+        setProjectPath(res.path);
+      }
+    } catch (e) {
+      console.error('[App] select_directory failed:', e);
+      addToast('Select Directory error: ' + e, { type: 'error' });
+    }
+  }, [addToast]);
 
   // 1. LOAD Workspace State on Mount
   useEffect(() => {
@@ -56,10 +95,11 @@ function MainApp({ currentTheme, onThemeChange }) {
           if (s.activePath) setActivePath(s.activePath);
           if (typeof s.showSidebar === 'boolean') setShowSidebar(s.showSidebar);
           if (typeof s.showTerminal === 'boolean') setShowTerminal(s.showTerminal);
-          if (typeof s.showAI === 'boolean') setShowAI(s.showAI);
           if (s.terminalHeight) setTerminalHeight(s.terminalHeight);
           if (s.toolWidth) setToolWidth(s.toolWidth);
-          if (s.sideWidth) setSideWidth(s.sideWidth);
+          if (typeof s.showAI === 'boolean') setShowAI(s.showAI);
+          if (s.aiWidth) setAiWidth(s.aiWidth);
+          if (s.projectPath) setProjectPath(s.projectPath);
           if (s.settings) setSettings(s.settings);
           if (s.aiMessages) setAiMessages(s.aiMessages);
         }
@@ -83,10 +123,11 @@ function MainApp({ currentTheme, onThemeChange }) {
           activePath,
           showSidebar,
           showTerminal,
-          showAI,
           terminalHeight,
           toolWidth,
-          sideWidth,
+          showAI,
+          aiWidth,
+          projectPath,
           settings,
           aiMessages
         });
@@ -97,7 +138,7 @@ function MainApp({ currentTheme, onThemeChange }) {
 
     const timer = setTimeout(saveSession, 1000); // 1s Debounce
     return () => clearTimeout(timer);
-  }, [openFiles, activePath, showSidebar, showTerminal, showAI, terminalHeight, toolWidth, settings, aiMessages, isInitialized]);
+  }, [openFiles, activePath, showSidebar, showTerminal, terminalHeight, toolWidth, showAI, aiWidth, settings, aiMessages, isInitialized]);
 
   const openFile = useCallback((file) => {
     setOpenFiles((prev) => {
@@ -123,16 +164,40 @@ function MainApp({ currentTheme, onThemeChange }) {
   }, [openFile]);
 
   const closeFile = useCallback((path) => {
-    console.log('[App] closeFile called', path);
     setOpenFiles((prev) => {
       const next = prev.filter((f) => f.path !== path);
-      console.log('[App] closeFile - next openFiles:', next.map(f => f.path));
-      setActivePath((curr) => {
-        if (curr !== path) return curr;
-        return next.length > 0 ? next[next.length - 1].path : null;
-      });
+      if (activePath === path) {
+        setActivePath(next.length > 0 ? next[next.length - 1].path : null);
+      }
       return next;
     });
+  }, [activePath]);
+
+  const closeOthers = useCallback((path) => {
+    setOpenFiles((prev) => prev.filter(f => f.path === path));
+    setActivePath(path);
+  }, []);
+
+  const closeAll = useCallback(() => {
+    setOpenFiles([]);
+    setActivePath(null);
+  }, []);
+
+  const closeRight = useCallback((path) => {
+    setOpenFiles((prev) => {
+      const idx = prev.findIndex(f => f.path === path);
+      if (idx === -1) return prev;
+      const next = prev.slice(0, idx + 1);
+      if (!next.find(f => f.path === activePath)) {
+        setActivePath(path);
+      }
+      return next;
+    });
+  }, [activePath]);
+
+  const handleReorderFiles = useCallback((newFiles) => {
+    console.log('[DEBUG] App: handleReorderFiles triggered with:', newFiles.map(f => f.name));
+    setOpenFiles(newFiles);
   }, []);
 
   const handleRun = useCallback(() => {
@@ -156,6 +221,29 @@ function MainApp({ currentTheme, onThemeChange }) {
     setShowTerminal(true);
     addToast(`Running ${activePath.split(/[\\/]/).pop()}...`, { type: 'info', duration: 2000 });
   }, [activePath, addToast]);
+
+  const handleLaunchCliProvider = useCallback(async (providerId, action = 'launch') => {
+    try {
+      const res = await pytron.get_cli_provider_command(providerId, action);
+      if (!res.success) {
+        addToast(res.error || 'Failed to prepare CLI command.', { type: 'error' });
+        return;
+      }
+
+      setPendingCommand(res.command);
+      setShowTerminal(true);
+
+      const providerName = res.provider?.name || providerId;
+      addToast(
+        action === 'install'
+          ? `Queued install command for ${providerName}.`
+          : `Opening ${providerName} in the terminal.`,
+        { type: 'info' },
+      );
+    } catch (e) {
+      addToast('Failed to launch CLI provider: ' + e, { type: 'error' });
+    }
+  }, [addToast]);
 
   const cycleTabs = useCallback(() => {
     console.log('[App] cycleTabs called - count:', openFiles.length);
@@ -188,6 +276,10 @@ function MainApp({ currentTheme, onThemeChange }) {
         e.preventDefault();
         cycleTabs();
       }
+      if (e.ctrlKey && e.key === 'Tab') { // Cycle Tabs via standard shortcut
+        e.preventDefault();
+        cycleTabs();
+      }
       if ((e.ctrlKey || e.metaKey) && e.key === 'w') { // Close Tab
         e.preventDefault();
         if (activePath) closeFile(activePath);
@@ -203,7 +295,21 @@ function MainApp({ currentTheme, onThemeChange }) {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [cycleTabs, closeFile, activePath, openFiles]);
+  }, [cycleTabs, closeFile, activePath, openFiles, setShowSidebar]);
+
+  useEffect(() => {
+    const handleTerminalOpenPath = (e) => {
+      const pathStr = e.detail?.path;
+      if (pathStr) {
+        // Strip trailing slashes or quotes if accidentally matched
+        const cleanPath = pathStr.replace(/["']/g, '');
+        const name = cleanPath.split(/[\\/]/).pop();
+        openFile({ path: cleanPath, name: name, is_dir: false });
+      }
+    };
+    window.addEventListener('terminal:openPath', handleTerminalOpenPath);
+    return () => window.removeEventListener('terminal:openPath', handleTerminalOpenPath);
+  }, [openFile]);
 
   const handleOpenTool = async (toolId) => {
     if (toolId === 'regex') setShowRegexLab(true);
@@ -211,7 +317,11 @@ function MainApp({ currentTheme, onThemeChange }) {
     if (toolId === 'imports') setShowImports(true);
     if (toolId === 'preview') setShowWebPreview(true);
     if (toolId === 'bytecode') setShowBytecode(true);
-    if (toolId === 'ai' || toolId === 'gemini') setShowAI(true);
+    if (toolId === 'ai' || toolId === 'gemini') {
+      setShowAI(true);
+    }
+    if (toolId === 'agent_lab') setShowAgentLab(true); // 3. Update handleOpenTool to open AgentLab
+    if (toolId === 'extensions') setShowExtensions(true);
     if (toolId === 'format') {
       if (!activePath || !activePath.endsWith('.py')) {
         addToast('Please select a Python file to format.', { type: 'warning' });
@@ -239,9 +349,15 @@ function MainApp({ currentTheme, onThemeChange }) {
       items: [
         { label: 'New File', onClick: () => addToast('New File not implemented', { type: 'info' }) },
         { label: 'Open File...', onClick: () => setShowPalette(true), shortcut: 'Ctrl+P' },
+        {
+          label: 'Open Folder...', onClick: handleSelectDirectory
+        },
+        { label: 'Close Folder', onClick: () => setProjectPath(null), enabled: !!projectPath },
         { separator: true },
         { label: 'Save', shortcut: 'Ctrl+S', onClick: () => addToast('Saved (Simulation)', { type: 'success' }) },
         { label: 'Save As...', onClick: () => { } },
+        { separator: true },
+        { label: 'Marketplace', icon: <Package size={14} />, onClick: () => setShowExtensions(true) },
         { separator: true },
         { label: 'Exit', onClick: () => { window.close(); } }
       ]
@@ -271,7 +387,8 @@ function MainApp({ currentTheme, onThemeChange }) {
         { separator: true },
         { label: 'Terminal', shortcut: 'Ctrl+`', onClick: () => setShowTerminal(s => !s) },
         { label: 'Web Preview', onClick: () => setShowWebPreview(true) },
-        { label: 'Regex Lab', onClick: () => setShowRegexLab(true) }
+        { label: 'Regex Lab', onClick: () => setShowRegexLab(true) },
+        { label: 'Inspector', onClick: async () => await pytron.inspector() }
       ]
     },
     {
@@ -291,7 +408,8 @@ function MainApp({ currentTheme, onThemeChange }) {
     {
       label: 'Terminal',
       items: [
-        { label: 'New Terminal', onClick: () => setShowTerminal(true) }
+        { label: 'New Terminal', onClick: () => setShowTerminal(true) },
+        { label: 'Clear Terminal', onClick: () => window.dispatchEvent(new CustomEvent('terminal:clear')) }
       ]
     },
     {
@@ -304,8 +422,72 @@ function MainApp({ currentTheme, onThemeChange }) {
     }
   ];
 
+  const defaultContextMenuItems = React.useMemo(() => [
+    {
+      label: 'Command Palette',
+      shortcut: 'Ctrl+P',
+      icon: <Layers size={14} />,
+      onClick: () => setShowPalette(true)
+    },
+    {
+      label: 'Open Folder',
+      icon: <FolderOpen size={14} />,
+      onClick: handleSelectDirectory
+    },
+    {
+      label: 'Extensions',
+      icon: <LayoutGrid size={14} />,
+      onClick: () => setShowExtensions(true)
+    },
+    { type: 'divider' },
+    {
+      label: 'Close All Tabs',
+      icon: <Trash2 size={14} />,
+      onClick: closeAll
+    },
+    {
+      label: 'Settings',
+      shortcut: 'Ctrl+,',
+      icon: <SettingsIcon size={14} />,
+      onClick: () => setShowSettings(true)
+    },
+    { type: 'divider' },
+    {
+      label: 'Reload Window',
+      shortcut: 'F5',
+      icon: <RefreshCcw size={14} />,
+      onClick: () => window.location.reload()
+    }
+  ], [handleSelectDirectory, closeAll]);
+
+  const [contextMenuItems, setContextMenuItems] = useState(defaultContextMenuItems);
+
+  useEffect(() => {
+    const handleSetMenu = (e) => {
+      if (e.detail && e.detail.items) {
+        setContextMenuItems(e.detail.items);
+      } else {
+        setContextMenuItems(defaultContextMenuItems);
+      }
+    };
+    
+    // Also reset to default if they click somewhere else to clear context menu
+    const handleResetMenu = () => {
+      setContextMenuItems(defaultContextMenuItems);
+    };
+
+    window.addEventListener('contextmenu:set', handleSetMenu);
+    window.addEventListener('click', handleResetMenu);
+
+    return () => {
+      window.removeEventListener('contextmenu:set', handleSetMenu);
+      window.removeEventListener('click', handleResetMenu);
+    };
+  }, [defaultContextMenuItems]);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: theme.bg, color: theme.fg }}>
+      <ContextMenu items={contextMenuItems} variant="windows" />
       <PytronTitleBar title="" icon={<img src="favicon.png" alt="icon" style={{ height: "16px", width: "16px" }} />} variant="windows" onClose={() => window.close()}>
         <div
           onMouseDown={(e) => e.stopPropagation()}
@@ -314,6 +496,25 @@ function MainApp({ currentTheme, onThemeChange }) {
           <PytronMenuBar menus={menuConfig} style={{ background: 'transparent' }} />
 
           <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px', paddingRight: '12px' }}>
+            <div
+              onClick={() => {
+                if (showConceptBoard) {
+                  closeFile('pytron://architecture');
+                } else {
+                  openFile({
+                    path: 'pytron://architecture',
+                    name: 'Architecture',
+                    type: 'tool',
+                    isUnsaved: false
+                  });
+                }
+              }}
+              className={`titlebar-toggle ${showConceptBoard ? 'active' : ''}`}
+              style={{ padding: '4px', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              title="Toggle Workspace Orchestrator"
+            >
+              <Compass size={16} />
+            </div>
             <div
               onClick={() => setShowSidebar(s => !s)}
               className={`titlebar-toggle ${showSidebar ? 'active' : ''}`}
@@ -332,9 +533,9 @@ function MainApp({ currentTheme, onThemeChange }) {
             </div>
             <div
               onClick={() => setShowAI(s => !s)}
-              className={`titlebar-toggle ${showAI ? 'active' : ''}`}
+              className="titlebar-toggle"
               style={{ padding: '4px', cursor: 'pointer', borderRadius: '4px', display: 'flex', gap: '4px', alignItems: 'center', justifyContent: 'center' }}
-              title="Toggle AI Assistant"
+              title="Toggle AI Sidebar"
             >
               <PanelRight size={16} />
               <Bot size={14} />
@@ -342,103 +543,133 @@ function MainApp({ currentTheme, onThemeChange }) {
           </div>
         </div>
       </PytronTitleBar>
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden', minWidth: 0 }}>
         {showSidebar && (
           <Sidebar
             onFileOpen={openFile}
+            onFolderOpen={setProjectPath}
             onDiffOpen={openDiff}
             onOpenSettings={() => setShowSettings(true)}
             activePath={activePath}
             onOpenTool={handleOpenTool}
+            onLaunchCliProvider={handleLaunchCliProvider}
             settings={settings}
+            projectPath={projectPath}
+            onOpenAI={() => setShowAI(true)}
+            architectureState={architectureSidebarState}
+            showConceptBoard={showConceptBoard}
           />
         )}
-        <div style={{ flex: '1 1 auto', display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
-          <TabsBar
-            files={openFiles}
-            activePath={activePath}
-            onActivate={(p) => setActivePath(p)}
-            onClose={closeFile}
-            onRun={handleRun}
-          />
-          <div style={{ flex: 1, position: 'relative', display: 'flex', minHeight: 0, overflow: 'hidden' }}>
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: '100px', overflow: 'hidden' }}>
-              <Suspense fallback={<div style={{ padding: 16, color: theme.fg }}>Loading editor...</div>}>
-                <CodeEditor
-                  activeFile={openFiles.find(f => f.path === activePath)}
-                  onCursorChange={setCursorInfo}
-                  settings={settings}
+
+        <div style={{ flex: 1, display: 'flex', minWidth: 0, overflow: 'hidden' }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
+            <TabsBar
+              files={openFiles}
+              activePath={activePath}
+              onActivate={(p) => setActivePath(p)}
+              onClose={closeFile}
+              onCloseOthers={closeOthers}
+              onCloseAll={closeAll}
+              onCloseRight={closeRight}
+              onRun={handleRun}
+              onReorderFiles={handleReorderFiles}
+            />
+
+            <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+              {showConceptBoard ? (
+                <Suspense fallback={<div>Loading Board...</div>}><ConceptBoard onSidebarStateChange={setArchitectureSidebarState} /></Suspense>
+              ) : (
+                <div style={{ display: 'flex', width: '100%', height: '100%', minWidth: 0, overflow: 'hidden' }}>
+                  <div style={{ flex: 1, position: 'relative', display: 'flex', minWidth: 0, overflow: 'hidden' }}>
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: '100px', overflow: 'hidden' }}>
+                      <Suspense fallback={<div style={{ padding: 16, color: theme.fg }}>Loading editor...</div>}>
+                        {activePath && !activePath.startsWith('diff:') && <Breadcrumbs path={activePath} projectPath={projectPath} onFileOpen={openFile} />}
+                        {activePath && activePath.endsWith('.ipynb') ? (
+                          <NotebookEditor path={activePath} onClose={() => closeFile(activePath)} />
+                        ) : (
+                          <CodeEditor
+                            activeFile={openFiles.find(f => f.path === activePath)}
+                            onCursorChange={setCursorInfo}
+                            settings={settings}
+                          />
+                        )}
+                      </Suspense>
+                    </div>
+
+                    {showWebPreview && (
+                      <div style={{ width: toolWidth, minWidth: '200px', position: 'relative', borderLeft: `1px solid ${theme.border}` }}>
+                        <ResizeHandle orientation="vertical" onResize={(e) => setToolWidth(Math.max(200, window.innerWidth - e.clientX))} style={{ position: 'absolute', left: 0, top: 0, bottom: 0 }} />
+                        <Suspense fallback={<div>Loading Preview...</div>}><WebPreview onClose={() => setShowWebPreview(false)} /></Suspense>
+                      </div>
+                    )}
+                    {showRegexLab && (
+                      <div style={{ width: toolWidth, minWidth: '200px', position: 'relative', borderLeft: `1px solid ${theme.border}` }}>
+                        <ResizeHandle orientation="vertical" onResize={(e) => setToolWidth(Math.max(200, window.innerWidth - e.clientX))} style={{ position: 'absolute', left: 0, top: 0, bottom: 0 }} />
+                        <Suspense fallback={<div>Loading Lab...</div>}><RegexLab onClose={() => setShowRegexLab(false)} /></Suspense>
+                      </div>
+                    )}
+                    {showMetrics && (
+                      <div style={{ width: toolWidth, minWidth: '200px', position: 'relative', borderLeft: `1px solid ${theme.border}` }}>
+                        <ResizeHandle orientation="vertical" onResize={(e) => setToolWidth(Math.max(200, window.innerWidth - e.clientX))} style={{ position: 'absolute', left: 0, top: 0, bottom: 0 }} />
+                        <Suspense fallback={<div>Loading Metrics...</div>}><CodeMetrics activePath={activePath} onClose={() => setShowMetrics(false)} /></Suspense>
+                      </div>
+                    )}
+                    {showImports && (
+                      <div style={{ width: toolWidth, minWidth: '200px', position: 'relative', borderLeft: `1px solid ${theme.border}` }}>
+                        <ResizeHandle orientation="vertical" onResize={(e) => setToolWidth(Math.max(200, window.innerWidth - e.clientX))} style={{ position: 'absolute', left: 0, top: 0, bottom: 0 }} />
+                        <Suspense fallback={<div>Loading Lens...</div>}><ImportLens activePath={activePath} onClose={() => setShowImports(false)} /></Suspense>
+                      </div>
+                    )}
+                    {showBytecode && (
+                      <div style={{ width: toolWidth, minWidth: '200px', position: 'relative', borderLeft: `1px solid ${theme.border}` }}>
+                        <ResizeHandle orientation="vertical" onResize={(e) => setToolWidth(Math.max(200, window.innerWidth - e.clientX))} style={{ position: 'absolute', left: 0, top: 0, bottom: 0 }} />
+                        <Suspense fallback={<div>Loading Bytecode...</div>}><BytecodeViewer activePath={activePath} onClose={() => setShowBytecode(false)} /></Suspense>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {showTerminal && (
+              <div style={{ height: terminalHeight, minHeight: '100px', maxHeight: '70vh', position: 'relative', zIndex: 10, borderTop: `1px solid ${theme.border}` }}>
+                <ResizeHandle orientation="horizontal" onResize={(e) => setTerminalHeight(Math.max(100, window.innerHeight - e.clientY))} style={{ position: 'absolute', top: 0, left: 0, right: 0 }} />
+                <Suspense fallback={<div>Loading Terminal...</div>}>
+                  <TerminalPanel
+                    onClose={() => setShowTerminal(false)}
+                    pendingCommand={pendingCommand}
+                    onCommandHandled={() => setPendingCommand(null)}
+                    projectPath={projectPath}
+                  />
+                </Suspense>
+              </div>
+            )}
+          </div>
+
+          {showAI && (
+            <div style={{ width: aiWidth, minWidth: '320px', maxWidth: '620px', position: 'relative', zIndex: 30, borderLeft: `1px solid ${theme.border}`, background: 'linear-gradient(180deg, rgba(22,22,24,0.98), rgba(12,12,14,0.98))', flexShrink: 0, height: '100%', boxShadow: '-14px 0 28px rgba(0,0,0,0.2)' }}>
+              <ResizeHandle
+                orientation="vertical"
+                onResize={(e) => setAiWidth(Math.max(320, window.innerWidth - e.clientX))}
+                style={{ position: 'absolute', left: 0, top: 0, bottom: 0, zIndex: 40, cursor: 'col-resize' }}
+              />
+              <Suspense fallback={<div>Loading AI...</div>}>
+                <AIPanel
+                  activePath={activePath}
+                  onClose={() => setShowAI(false)}
+                  messages={aiMessages}
+                  setMessages={setAiMessages}
                 />
               </Suspense>
             </div>
-            {showWebPreview && (
-              <div style={{ width: toolWidth, minWidth: '200px', position: 'relative', borderLeft: `1px solid ${theme.border}` }}>
-                <ResizeHandle orientation="vertical" onResize={(e) => setToolWidth(Math.max(200, window.innerWidth - e.clientX))} style={{ position: 'absolute', left: 0, top: 0, bottom: 0 }} />
-                <WebPreview onClose={() => setShowWebPreview(false)} />
-              </div>
-            )}
-            {showRegexLab && (
-              <div style={{ width: toolWidth, minWidth: '200px', position: 'relative', borderLeft: `1px solid ${theme.border}` }}>
-                <ResizeHandle orientation="vertical" onResize={(e) => setToolWidth(Math.max(200, window.innerWidth - e.clientX))} style={{ position: 'absolute', left: 0, top: 0, bottom: 0 }} />
-                <RegexLab onClose={() => setShowRegexLab(false)} />
-              </div>
-            )}
-            {showMetrics && (
-              <div style={{ width: toolWidth, minWidth: '200px', position: 'relative', borderLeft: `1px solid ${theme.border}` }}>
-                <ResizeHandle orientation="vertical" onResize={(e) => setToolWidth(Math.max(200, window.innerWidth - e.clientX))} style={{ position: 'absolute', left: 0, top: 0, bottom: 0 }} />
-                <CodeMetrics activePath={activePath} onClose={() => setShowMetrics(false)} />
-              </div>
-            )}
-            {showImports && (
-              <div style={{ width: toolWidth, minWidth: '200px', position: 'relative', borderLeft: `1px solid ${theme.border}` }}>
-                <ResizeHandle orientation="vertical" onResize={(e) => setToolWidth(Math.max(200, window.innerWidth - e.clientX))} style={{ position: 'absolute', left: 0, top: 0, bottom: 0 }} />
-                <ImportLens activePath={activePath} onClose={() => setShowImports(false)} />
-              </div>
-            )}
-            {showBytecode && (
-              <div style={{ width: toolWidth, minWidth: '200px', position: 'relative', borderLeft: `1px solid ${theme.border}` }}>
-                <ResizeHandle orientation="vertical" onResize={(e) => setToolWidth(Math.max(200, window.innerWidth - e.clientX))} style={{ position: 'absolute', left: 0, top: 0, bottom: 0 }} />
-                <BytecodeViewer activePath={activePath} onClose={() => setShowBytecode(false)} />
-              </div>
-            )}
-          </div>
-          {showTerminal && (
-            <div style={{ height: terminalHeight, minHeight: '100px', maxHeight: '70vh', position: 'relative', borderTop: `1px solid ${theme.border}` }}>
-              <ResizeHandle orientation="horizontal" onResize={(e) => setTerminalHeight(Math.max(100, window.innerHeight - e.clientY))} style={{ position: 'absolute', top: 0, left: 0, right: 0 }} />
-              <TerminalPanel
-                onClose={() => setShowTerminal(false)}
-                pendingCommand={pendingCommand}
-                onCommandHandled={() => setPendingCommand(null)}
-              />
-            </div>
           )}
         </div>
-        {showAI && (
-          <div style={{
-            width: sideWidth,
-            minWidth: '250px',
-            position: 'relative',
-            borderLeft: `1px solid ${theme.border}`,
-            background: theme.bg,
-            flexShrink: 0  // Critical for pushing the editor instead of overlaying
-          }}>
-            <ResizeHandle
-              orientation="vertical"
-              onResize={(e) => setSideWidth(Math.max(250, window.innerWidth - e.clientX))}
-              style={{ position: 'absolute', left: '-2px', top: 0, bottom: 0, width: '4px', zIndex: 100, cursor: 'col-resize' }}
-            />
-            <AIPanel
-              activePath={activePath}
-              onClose={() => setShowAI(false)}
-              messages={aiMessages}
-              setMessages={setAiMessages}
-            />
-          </div>
-        )}
       </div>
-      <StatusBar cursor={cursorInfo} onToggleTerminal={() => setShowTerminal(s => !s)} />
+      <StatusBar cursor={cursorInfo} onToggleTerminal={() => setShowTerminal(s => !s)} projectPath={projectPath} />
       {showPalette && <CommandPalette onOpen={(file) => { openFile(file); setShowPalette(false); }} onClose={() => setShowPalette(false)} />}
-      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} settings={settings} onUpdateSettings={setSettings} currentTheme={currentTheme} onThemeChange={onThemeChange} />}
+      {showAgentLab && <Suspense fallback={null}><AgentLab onClose={() => setShowAgentLab(false)} /></Suspense>}
+      {showExtensions && <Suspense fallback={null}><ExtensionStore onClose={() => setShowExtensions(false)} /></Suspense>}
+      {showSettings && <Suspense fallback={null}><SettingsModal onClose={() => setShowSettings(false)} settings={settings} onUpdateSettings={setSettings} currentTheme={currentTheme} onThemeChange={onThemeChange} /></Suspense>}
     </div>
   );
 }

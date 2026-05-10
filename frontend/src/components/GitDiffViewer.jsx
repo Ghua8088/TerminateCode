@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { DiffEditor } from '@monaco-editor/react';
 import pytron from 'pytron-client';
 import { useTheme } from 'pytron-ui/react';
@@ -10,6 +10,17 @@ const GitDiffViewer = ({ path, settings = {} }) => {
     const [loading, setLoading] = useState(true);
     const theme = useTheme();
     const { fontSize = 14, theme: editorTheme = 'vs-dark' } = settings;
+    const diffEditorRef = useRef(null);
+
+    useEffect(() => {
+        return () => {
+            if (diffEditorRef.current) {
+                try {
+                    diffEditorRef.current.setModel(null);
+                } catch (e) {}
+            }
+        };
+    }, []);
 
     const loadDiff = async () => {
         setLoading(true);
@@ -29,10 +40,6 @@ const GitDiffViewer = ({ path, settings = {} }) => {
         loadDiff();
     }, [path]);
 
-    if (loading) {
-        return <div style={{ padding: 20, color: theme.fg }}>Loading diff...</div>;
-    }
-
     return (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#1e1e1e' }}>
             <div style={{
@@ -50,11 +57,17 @@ const GitDiffViewer = ({ path, settings = {} }) => {
                     <RefreshCw size={14} style={{ cursor: 'pointer', color: '#888' }} onClick={loadDiff} />
                 </div>
             </div>
-            <div style={{ flex: 1 }}>
+            <div style={{ flex: 1, position: 'relative' }}>
+                {loading && (
+                    <div style={{ position: 'absolute', inset: 0, zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(30,30,30,0.6)', color: theme.fg }}>
+                        Loading diff...
+                    </div>
+                )}
                 <DiffEditor
                     height="100%"
                     original={original}
                     modified={modified}
+                    onMount={(editor) => diffEditorRef.current = editor}
                     language={path.split('.').pop() === 'js' ? 'javascript' : path.split('.').pop() === 'py' ? 'python' : 'plaintext'}
                     theme={editorTheme}
                     options={{

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { GitBranch, RefreshCw, Check, Plus, RotateCcw, X, History } from 'lucide-react';
+import { GitBranch, RefreshCw, Check, Plus, RotateCcw, X, History, Sparkles } from 'lucide-react';
 import pytron from 'pytron-client';
 import { useToast, useTheme } from 'pytron-ui/react';
 
@@ -11,8 +11,25 @@ const GitPanel = ({ onDiffOpen }) => {
   const [error, setError] = useState(null);
   const [showLog, setShowLog] = useState(false);
   const [gitLog, setGitLog] = useState('');
+  const [isRepo, setIsRepo] = useState(true);
+  const [isGeneratingMsg, setIsGeneratingMsg] = useState(false);
   const { addToast } = useToast();
   const theme = useTheme();
+
+  const handleInit = async () => {
+    try {
+      const res = await pytron.git_action('init');
+      if (res.success) {
+        addToast('Git repository initialized!', { type: 'success' });
+        loadStatus();
+      } else {
+        addToast('Init failed: ' + res.error, { type: 'error' });
+      }
+    } catch (e) {
+      console.error(e);
+      addToast('Error initializing git: ' + e.message, { type: 'error' });
+    }
+  };
 
   const loadStatus = useCallback(async () => {
     try {
@@ -20,10 +37,12 @@ const GitPanel = ({ onDiffOpen }) => {
       if (res.success) {
         setChanges(res.changes || []);
         setCurrentBranch(res.branch || '');
+        setIsRepo(res.is_repo !== false);
         setError(null);
       } else {
         setError(res.error);
         setChanges([]);
+        setIsRepo(false);
       }
 
       const bRes = await pytron.list_branches('.');
@@ -79,6 +98,23 @@ const GitPanel = ({ onDiffOpen }) => {
     }
   };
 
+  const handleGenerateMessage = async () => {
+    setIsGeneratingMsg(true);
+    addToast('Analyzing diff...', { type: 'info' });
+    try {
+      const res = await pytron.generate_commit_message();
+      if (res.success && res.message) {
+        setMessage(res.message);
+        addToast('Message generated!', { type: 'success' });
+      } else {
+        addToast('Generation failed: ' + (res.error || 'Unknown error'), { type: 'error' });
+      }
+    } catch (err) {
+      addToast('Request failed: ' + err.message, { type: 'error' });
+    }
+    setIsGeneratingMsg(false);
+  };
+
   const handleCheckout = async (branchName) => {
     try {
       const res = await pytron.checkout_branch(branchName);
@@ -95,14 +131,14 @@ const GitPanel = ({ onDiffOpen }) => {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: theme.surface }}>
       <div style={{
         padding: '10px',
-        borderBottom: '1px solid #333',
-        fontWeight: 'bold',
         fontSize: '11px',
-        color: '#bbb',
+        fontWeight: 'bold',
+        color: theme.fg,
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        background: theme.bg
+        background: theme.bg,
+        borderBottom: `1px solid ${theme.border}`
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <History size={14} color="#4fc1ff" />
@@ -114,8 +150,8 @@ const GitPanel = ({ onDiffOpen }) => {
         </div>
       </div>
 
-      <div style={{ padding: '8px 10px', borderBottom: '1px solid #333', display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <GitBranch size={14} color="#888" />
+      <div style={{ padding: '8px', borderBottom: `1px solid ${theme.border}`, display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#888' }}>
+        <GitBranch size={12} />
         <select
           value={currentBranch}
           onChange={(e) => handleCheckout(e.target.value)}
@@ -123,7 +159,7 @@ const GitPanel = ({ onDiffOpen }) => {
             background: 'transparent',
             border: 'none',
             color: '#ccc',
-            fontSize: '12px',
+            fontSize: '11px',
             outline: 'none',
             flex: 1,
             cursor: 'pointer'
@@ -136,65 +172,80 @@ const GitPanel = ({ onDiffOpen }) => {
       </div>
 
       {error && (
-        <div style={{ padding: '10px', color: '#ff6b6b', fontSize: '12px', borderBottom: '1px solid #333' }}>
+        <div style={{ padding: '8px', color: '#ff6b6b', fontSize: '11px', borderBottom: `1px solid ${theme.border}` }}>
           {error}
         </div>
       )}
 
-      <div style={{ padding: '10px', borderBottom: '1px solid #333' }}>
-        <input
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          placeholder="Message (Ctrl+Enter to commit)"
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-              handleCommit();
-            }
-          }}
-          style={{
-            width: '100%',
-            background: '#2d2d2d',
-            border: '1px solid #333',
-            color: '#fff',
-            padding: '8px',
-            fontSize: '12.5px',
-            outline: 'none',
-            borderRadius: '4px',
-            marginBottom: '8px'
-          }}
-        />
-        <button
-          onClick={handleCommit}
-          disabled={changes.length === 0 || !message.trim()}
-          style={{
-            width: '100%',
-            background: '#007fd4',
-            color: '#fff',
-            border: 'none',
-            padding: '6px',
-            cursor: 'pointer',
-            fontSize: '12px',
-            borderRadius: '4px',
-            opacity: (changes.length === 0 || !message.trim()) ? 0.5 : 1,
-            fontWeight: '600'
-          }}
-        >
-          Commit
-        </button>
+      <div style={{ padding: '10px 8px', borderBottom: `1px solid ${theme.border}` }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', background: 'rgba(0,0,0,0.15)', border: `1px solid ${theme.border}`, padding: '1px', borderRadius: '4px' }}>
+          <textarea
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            placeholder="Message (Ctrl+Enter to commit)"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                handleCommit();
+              }
+            }}
+            style={{
+              width: '100%',
+              background: 'transparent',
+              border: 'none',
+              color: theme.fg,
+              padding: '6px',
+              fontSize: '12px',
+              outline: 'none',
+              resize: 'none',
+              minHeight: '52px',
+              fontFamily: "inherit"
+            }}
+          />
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0 4px 4px 4px', alignItems: 'center' }}>
+            <Sparkles 
+              size={13} 
+              color={isGeneratingMsg ? '#888' : '#a855f7'} 
+              style={{ cursor: isGeneratingMsg || changes.length === 0 ? 'not-allowed' : 'pointer', opacity: changes.length === 0 ? 0.3 : 1 }}
+              onClick={changes.length > 0 && !isGeneratingMsg ? handleGenerateMessage : undefined} 
+              title="Auto-generate commit message"
+            />
+            <button
+              onClick={handleCommit}
+              disabled={changes.length === 0 || !message.trim()}
+              title="Commit (Ctrl+Enter)"
+              style={{
+                background: '#007fd4',
+                color: '#fff',
+                border: 'none',
+                padding: '4px 10px',
+                cursor: 'pointer',
+                fontSize: '11px',
+                borderRadius: '3px',
+                opacity: (changes.length === 0 || !message.trim()) ? 0.4 : 1,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                fontWeight: '500'
+              }}
+            >
+              <Check size={12} /> Commit
+            </button>
+          </div>
+        </div>
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto' }}>
         <div style={{
-          padding: '8px 10px',
+          padding: '10px 14px',
           fontSize: '11px',
-          fontWeight: 'bold',
-          color: '#888',
+          fontWeight: '600',
+          color: theme.fg,
           display: 'flex',
           justifyContent: 'space-between',
-          letterSpacing: '0.05em'
+          alignItems: 'center'
         }}>
-          <span>CHANGES ({changes.length})</span>
-          <Plus size={12} style={{ cursor: 'pointer' }} onClick={handleStageAll} title="Stage All" />
+          <span>CHANGES <span style={{ background: '#333', padding: '1px 6px', borderRadius: '10px', fontSize: '9px', marginLeft: '4px' }}>{changes.length}</span></span>
+          <Plus size={14} style={{ cursor: 'pointer', color: '#ccc' }} onClick={handleStageAll} title="Stage All Changes" />
         </div>
         {changes.map((change, idx) => (
           <div
@@ -228,9 +279,30 @@ const GitPanel = ({ onDiffOpen }) => {
             </div>
           </div>
         ))}
-        {changes.length === 0 && (
+        {changes.length === 0 && isRepo && (
           <div style={{ padding: '20px', textAlign: 'center', color: '#555', fontSize: '12px' }}>
             No pending changes.
+          </div>
+        )}
+        {!isRepo && (
+          <div style={{ padding: '40px 20px', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'center' }}>
+            <GitBranch size={40} color="#333" />
+            <div style={{ color: '#888', fontSize: '13px' }}>The current folder is not a git repository.</div>
+            <button
+              onClick={handleInit}
+              style={{
+                background: '#007fd4',
+                color: '#fff',
+                border: 'none',
+                padding: '8px 16px',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '12px',
+                fontWeight: '600'
+              }}
+            >
+              Initialize Repository
+            </button>
           </div>
         )}
       </div>

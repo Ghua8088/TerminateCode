@@ -12,18 +12,158 @@ import subprocess
 from backend.services.model_manager import get_model_instance, get_available_models as get_manager_models
 from backend.services import agent_tools
 from backend.services.memory_manager import memory_manager
+from backend.services.custom_tool_registry import registry as custom_tool_registry, CustomToolRegistry
 import uuid
 import threading
+import difflib
+import shutil
+
+# Persistent history for rollbacks
+BACKUP_DIR = os.path.join(os.getcwd(), ".tcode", "backups")
+
+def generate_diff(path: str, old_content: str, new_content: str) -> str:
+    """Generate a git-style diff between old and new content."""
+    old_lines = old_content.splitlines(keepends=True)
+    new_lines = new_content.splitlines(keepends=True)
+    diff = difflib.unified_diff(old_lines, new_lines, fromfile=f"a/{path}", tofile=f"b/{path}")
+    return "".join(diff)
+
+def backup_file(path: str):
+    """Save current state to .pytron/backups for rollback."""
+    try:
+        os.makedirs(BACKUP_DIR, exist_ok=True)
+        abs_path = os.path.abspath(path)
+        base_name = os.path.basename(abs_path)
+        timestamp = uuid.uuid4().hex[:8]
+        backup_path = os.path.join(BACKUP_DIR, f"{base_name}.{timestamp}.bak")
+        
+        state = {
+            "original_path": abs_path,
+            "backup_path": backup_path,
+            "type": "modify" if os.path.exists(path) else "create",
+            "timestamp": timestamp
+        }
+        
+        if os.path.exists(path):
+            shutil.copy2(path, backup_path)
+        
+        # Save state to index
+        import json
+        index_path = os.path.join(BACKUP_DIR, "index.json")
+        history = []
+        if os.path.exists(index_path):
+            with open(index_path, "r") as f:
+                history = json.load(f)
+        
+        history.append(state)
+        with open(index_path, "w") as f:
+            json.dump(history, f)
+            
+    except Exception as e:
+        print(f"Backup failed: {e}")
+
+@tool
+def undo_last_change() -> str:
+    """Roll back the very last file modification made by Agentic."""
+    try:
+        import json
+        index_path = os.path.join(BACKUP_DIR, "index.json")
+        if not os.path.exists(index_path):
+            return "No history found."
+            
+        with open(index_path, "r") as f:
+            history = json.load(f)
+            
+        if not history:
+            return "No changes to undo."
+            
+        last = history.pop()
+        path = last["original_path"]
+        backup = last["backup_path"]
+        
+        if last["type"] == "create":
+            if os.path.exists(path):
+                os.remove(path)
+                res = f"Undone creation of {path}."
+            else: res = f"File {path} already gone."
+        else:
+            if os.path.exists(backup):
+                shutil.copy2(backup, path)
+                os.remove(backup)
+                res = f"Restored {path} from backup."
+            else: res = f"Backup file {backup} not found."
+            
+        # Update index
+        with open(index_path, "w") as f:
+            json.dump(history, f)
+            
+        return res
+    except Exception as e:
+        return f"Rollback failed: {str(e)}"
 
 # Define Tools for the AI
 @tool
-def read_file(path: str) -> str:
-    """Read the content of a file at the given path."""
+def read_file(path: str, start_line: int = None, end_line: int = None) -> str:
+    """Read the content of a file at the given path. Optionally provide start_line and end_line (1-based index) to read specific lines. Use this to save context limits on huge files."""
     try:
         with open(path, "r", encoding="utf-8") as f:
-            return f.read()
+            if start_line is None and end_line is None:
+                return f.read()
+            lines = f.readlines()
+            start = max(0, (start_line or 1) - 1)
+            end = len(lines) if end_line is None else end_line
+            return "".join(lines[start:end])
     except Exception as e:
         return f"Error reading file: {str(e)}"
+
+@tool
+def write_file(path: str, content: str) -> str:
+    """Create a new file or overwrite an existing one with the given content."""
+    from backend.services.ai_service import ai_service_instance
+    try:
+        old_content = ""
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
+                old_content = f.read()
+        
+        diff = generate_diff(path, old_content, content)
+        
+        if ai_service_instance:
+            allowed = ai_service_instance.ask_confirmation(f"Requesting to write {path}", diff=diff)
+            if not allowed:
+                return "Modification cancelled by user."
+        
+        backup_file(path)
+        os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(content)
+        return f"Successfully wrote to {path}"
+    except Exception as e:
+        return f"Error writing file: {str(e)}"
+
+@tool
+def delete_file(path: str) -> str:
+    """Delete a file or directory at the given path."""
+    try:
+        if os.path.isdir(path):
+            import shutil
+            shutil.rmtree(path)
+            return f"Successfully deleted directory {path}"
+        else:
+            os.remove(path)
+            return f"Successfully deleted file {path}"
+    except Exception as e:
+        return f"Error deleting: {str(e)}"
+
+@tool
+def move_file(src: str, dst: str) -> str:
+    """Move or rename a file/directory from src to dst."""
+    try:
+        os.makedirs(os.path.dirname(os.path.abspath(dst)), exist_ok=True)
+        os.rename(src, dst)
+        return f"Successfully moved {src} to {dst}"
+    except Exception as e:
+        return f"Error moving: {str(e)}"
 
 @tool
 def list_directory(path: str = ".") -> str:
@@ -36,11 +176,39 @@ def list_directory(path: str = ".") -> str:
 
 @tool
 def execute_command(command: str) -> str:
-    """Execute a shell command and return the output. Use with caution."""
-    # We'll handle confirmation inside AIService run loop for better context
+    """Execute a shell command and return the output. Use with caution.
+    NOTE: For listing files, ALWAYS use 'list_directory' instead - it's 10x faster.
+    NOTE: Commands must be non-interactive (e.g., use -y or --yes).
+    Long running commands might time out after 60 seconds.
+    """
+    from backend.services.ai_service import ai_service_instance
     try:
-        result = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=30)
-        return f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        # Use a more efficient way to run commands
+        process = subprocess.Popen(
+            command,
+            shell=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1,
+            universal_newlines=True
+        )
+        
+        # Track process for interruption
+        if ai_service_instance:
+            ai_service_instance.current_process = process
+            
+        try:
+            stdout, stderr = process.communicate(timeout=60)
+            return f"STDOUT:\n{stdout}\nSTDERR:\n{stderr}"
+        except subprocess.TimeoutExpired:
+            process.kill()
+            stdout, stderr = process.communicate()
+            return f"Error: Command timed out after 60 seconds. STDOUT so far:\n{stdout}"
+        finally:
+            if ai_service_instance:
+                ai_service_instance.current_process = None
+                
     except Exception as e:
         return f"Error executing command: {str(e)}"
 
@@ -57,7 +225,31 @@ def advanced_search(pattern: str, file_ext: Optional[str] = None) -> str:
 @tool
 def apply_patch(path: str, search_block: str, replace_block: str) -> str:
     """Surgically replace a block of code in a file. Use this for precise edits instead of overwriting the whole file."""
-    return agent_tools.apply_patch(path, search_block, replace_block)
+    from backend.services.ai_service import ai_service_instance
+    try:
+        if not os.path.exists(path):
+            return f"Error: File not found at {path}"
+            
+        with open(path, 'r', encoding='utf-8') as f:
+            content = f.read()
+            
+        if search_block not in content:
+            return "Error: Could not find the exact search block in the file. Ensure whitespace and indentation match exactly."
+            
+        new_content = content.replace(search_block, replace_block)
+        diff = generate_diff(path, content, new_content)
+        
+        if ai_service_instance:
+            allowed = ai_service_instance.ask_confirmation(f"Requesting to patch {path}", diff=diff)
+            if not allowed:
+                return "Patch cancelled by user."
+        
+        backup_file(path)
+        with open(path, 'w', encoding='utf-8') as f:
+            f.write(new_content)
+        return f"Successfully applied patch to {path}."
+    except Exception as e:
+        return f"Patch Error: {str(e)}"
 
 @tool
 def git_status() -> str:
@@ -97,27 +289,52 @@ class AIService:
         self.api_key = api_key
         self.on_event = None
         self.pending_confirmations = {}
+        self.interrupted = False
+        self.current_process = None
         self.tools = [
-            read_file, list_directory, execute_command,
+            read_file, write_file, delete_file, move_file,
+            list_directory, execute_command,
             get_project_map, advanced_search, apply_patch,
             git_status, git_diff, git_log, memorize, recall,
-            read_directory_context
+            read_directory_context, undo_last_change
         ]
+        
+        # Load custom tools
+        try:
+            custom_tools = custom_tool_registry.load_tools()
+            self.tools.extend(custom_tools)
+            print(f"Loaded {len(custom_tools)} custom agent tools.")
+        except Exception as e:
+            print(f"Error loading custom tools: {e}")
+
+    def interrupt(self):
+        """Interrupt current agent execution."""
+        self.interrupted = True
+        if self.current_process:
+            try:
+                print(f"[AIService] Killing current process...")
+                self.current_process.kill()
+            except:
+                pass
 
     def _emit(self, event_type, data):
         if self.on_event:
             self.on_event(event_type, data)
 
-    def ask_confirmation(self, message: str) -> bool:
+    def ask_confirmation(self, message: str, diff: str = None, confirm_id: str = None) -> bool:
         """Emits a confirmation event to the UI and waits for the user response."""
         if not self.on_event:
             return True # Auto-approve if no handler
             
-        confirm_id = str(uuid.uuid4())
+        confirm_id = confirm_id or str(uuid.uuid4())
         event = threading.Event()
         self.pending_confirmations[confirm_id] = {"event": event, "answer": False}
         
-        self._emit("confirm_required", {"id": confirm_id, "message": message})
+        self._emit("confirm_required", {
+            "id": confirm_id, 
+            "message": message,
+            "diff": diff
+        })
         
         # Wait up to 2 minutes for user response
         if event.wait(timeout=120):
@@ -138,26 +355,45 @@ class AIService:
     async def run_agent_stream(self, prompt: str, model_id: str = "gemini-2.0-flash", history: List[Any] = []):
         """Streaming turn with RAG and Auto-Logging."""
         try:
+            is_local = model_id.endswith(('.gguf', '.bin'))
+            
+            # Detect size using regex (e.g., 1.5b, 3b, 7b)
+            import re
+            size_match = re.search(r'(\d+(?:\.\d+)?)[Bb]', model_id)
+            model_size = float(size_match.group(1)) if size_match else 7.0 # Assume 7B if unknown
+            
+            is_tiny = model_size <= 10 or any(x in model_id.lower() for x in ['phi', 'tiny', 'mini', 'stablelm'])
+            
             # 0. Optional RAG: Fetch relevant project context
-            memories = await memory_manager.search(prompt, k=3)
+            # Skip RAG for tiny models to preserve their limited context window
             context_snippet = ""
-            if memories:
-                context_snippet = "\n\n### RELEVANT PROJECT CONTEXT (RAG)\n" + \
-                    "\n".join([f"- {m['content']} (from {m['timestamp'][:10]})" for m in memories])
+            if not is_tiny:
+                memories = await memory_manager.search(prompt, k=2 if is_local else 3)
+                if memories:
+                    context_snippet = "\n\n### PROJECT CONTEXT\n" + \
+                        "\n".join([f"- {m['content']}" for m in memories])
+            
             # 1. Prepare chat history
-            system_msg = AIMessage(content=f"""
+            if is_tiny:
+                # Ultra-lite mode for models < 3B parameters
+                system_content = f"You are Agentic, an IDE helper. Be very brief. To use tools, output: <tool_call> {{\"name\": \"...\", \"arguments\": {{...}}}} </tool_call>. {context_snippet}"
+                history = history[-4:] # Only last 4 messages for tiny models
+            elif is_local:
+                # Compressed prompt for local models to reduce prefill time
+                system_content = f"You are Agentic, an IDE Assistant. Be concise. To use a tool, output exactly: <tool_call> {{\"name\": \"tool_name\", \"arguments\": {{...}}}} </tool_call>. {context_snippet}"
+            else:
+                system_content = f"""
 ### IDENTITY
 You are Agentic, an Autonomous Engineering Assistant within the TerminateCode IDE.
 
 ### CORE PROTOCOLS
-1. **THINK FIRST**: Always start your response with a `<think>` block where you analyze the user's request, plan your steps, and identify which tools to use.
-2. **SITUATIONAL AWARENESS**: Before making assumptions, use `get_project_map` or `read_file`.
-3. **PRECISION EDITS**: Use `apply_patch` for surgical code changes.
-4. **CONTINUITY**: You have access to a Knowledge Base of past changes. Use it to maintain consistency.{context_snippet}
-
-### MISSION
-Your goal is to build and maintain the project with precision.
-""")
+1. **THINK FIRST**: Always start your response with a concise <think> block. Analyze the request and plan efficiently.
+2. **SITUATIONAL AWARENESS**: Use tools like `get_project_map` before assuming.
+3. **NON-INTERACTIVE**: Use -y/--yes for commands.
+4. **OPERATIONS**: Use `apply_patch` for surgical edits.
+{context_snippet}
+"""
+            system_msg = AIMessage(content=system_content)
             messages = [system_msg]
             
             for msg in history:
@@ -167,8 +403,6 @@ Your goal is to build and maintain the project with precision.
                     if role == "user":
                         messages.append(HumanMessage(content=content))
                     elif role == "assistant":
-                        # Convert cached message to AIMessage object
-                        # If it has tool calls in metadata, we'd ideally reconstruct them
                         messages.append(AIMessage(content=content))
                 else:
                     messages.append(msg)
@@ -181,6 +415,10 @@ Your goal is to build and maintain the project with precision.
 
             # 3. Execution Loop
             for i in range(10): # Relaxed limit for complex tasks
+                if self.interrupted:
+                    yield {"type": "token", "content": "\n\n[Interrupted by user]"}
+                    break
+
                 print(f"DEBUG: Agent Loop Round {i+1}")
                 
                 full_content = ""
@@ -188,10 +426,13 @@ Your goal is to build and maintain the project with precision.
                 
                 # Stream the current turn
                 async for chunk in model_with_tools.astream(messages):
+                    if self.interrupted:
+                        break
+
                     last_response = chunk if last_response is None else last_response + chunk
                     
                     if chunk.content:
-                        # Extract text if content is a list (some models return parts)
+                        # Extract text
                         text = ""
                         if isinstance(chunk.content, list):
                             text = "".join([c.get("text", "") for c in chunk.content if isinstance(c, dict) and "text" in c])
@@ -199,20 +440,52 @@ Your goal is to build and maintain the project with precision.
                             text = str(chunk.content)
                         
                         if text:
-                            full_content += text
-                            yield {"type": "token", "content": text}
+                            # For some models/adapters, chunk.content might contain the full accumulated text.
+                            # We ensure we only yield the new delta to prevent tokens appearing multiple times.
+                            if full_content and text.startswith(full_content):
+                                delta = text[len(full_content):]
+                            else:
+                                delta = text
+                                
+                            if delta:
+                                full_content += delta
+                                yield {"type": "token", "content": delta}
                 
-                if not last_response:
+                if self.interrupted or not last_response:
                     break
                     
                 messages.append(last_response)
                 
                 # 4. Handle Tool Calls
-                if not last_response.tool_calls:
+                tool_calls = list(last_response.tool_calls) if hasattr(last_response, 'tool_calls') else []
+                
+                # Manual parsing for models that don't support native tool calling (XML-style)
+                if not tool_calls and "<tool_call>" in full_content:
+                    import re
+                    import json
+                    matches = re.findall(r"<tool_call>(.*?)</tool_call>", full_content, re.DOTALL)
+                    for m in matches:
+                        try:
+                            # Clean up potential markdown code blocks inside
+                            m_clean = re.sub(r"^```json\n?", "", m.strip())
+                            m_clean = re.sub(r"\n?```$", "", m_clean)
+                            data = json.loads(m_clean)
+                            tool_calls.append({
+                                "name": data.get("name"),
+                                "args": data.get("arguments") or data.get("args") or {},
+                                "id": f"manual_{uuid.uuid4().hex[:8]}"
+                            })
+                        except Exception as e:
+                            print(f"DEBUG: Failed to parse manual tool call: {e}")
+                
+                if not tool_calls:
                     print("DEBUG: No tool calls, ending loop.")
                     break
                     
-                for tool_call in last_response.tool_calls:
+                for tool_call in tool_calls:
+                    if self.interrupted:
+                        break
+
                     tool_name = tool_call["name"]
                     tool_args = tool_call["args"]
                     tool_id = tool_call.get("id") or str(uuid.uuid4())
@@ -223,8 +496,8 @@ Your goal is to build and maintain the project with precision.
                     yield {"type": "tool_call", "name": tool_name, "args": tool_args, "id": tool_id}
 
                     # Confirmation check
-                    if tool_name in ["execute_command", "apply_patch"]:
-                        allowed = self.ask_confirmation(f"Allow {tool_name}?")
+                    if tool_name in ["execute_command", "delete_file"]:
+                        allowed = self.ask_confirmation(f"Allow {tool_name}?", confirm_id=tool_id)
                         if not allowed:
                             res_msg = ToolMessage(content="Cancelled by user.", tool_call_id=tool_id)
                             messages.append(res_msg)
@@ -240,7 +513,7 @@ Your goal is to build and maintain the project with precision.
                             res_str = str(result)
                             
                             # 5. Auto-Logging: Record successful changes to Knowledge Base
-                            if tool_name in ["apply_patch", "execute_command"] and "Successfully" in res_str:
+                            if tool_name in ["apply_patch", "execute_command", "write_file"] and "Successfully" in res_str:
                                 summary = f"Changed {tool_args.get('path', 'codebase')}: {prompt[:50]}..."
                                 await memory_manager.add_memory(summary, metadata={"tool": tool_name})
                                 
@@ -269,8 +542,7 @@ Your goal is to build and maintain the project with precision.
             else:
                 yield {"type": "error", "content": f"AI Error: {err_msg}"}
         finally:
-            # End of response marker if needed
-            pass
+            self.interrupted = False
 
     def run_agent(self, prompt: str, model_id: str = "gemini-2.0-flash", history: List[Any] = []) -> str:
         """
@@ -291,9 +563,14 @@ Your goal is to build and maintain the project with precision.
         return full_res
 
 ai_service_instance = None
+active_ai_service_instance = None
+
+def get_active_ai_service():
+    return active_ai_service_instance
 
 def get_ai_service(api_key: str) -> AIService:
-    global ai_service_instance
+    global ai_service_instance, active_ai_service_instance
     if ai_service_instance is None or ai_service_instance.api_key != api_key:
         ai_service_instance = AIService(api_key)
+    active_ai_service_instance = ai_service_instance
     return ai_service_instance

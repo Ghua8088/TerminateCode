@@ -1,4 +1,4 @@
-import { StrictMode, useState } from 'react'
+import { StrictMode, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
@@ -42,6 +42,29 @@ const themes = {
     warning: '#ffff00',
   }
 };
+
+const resizeObserverMessages = [
+  'ResizeObserver loop completed with undelivered notifications.',
+  'ResizeObserver loop limit exceeded',
+];
+
+const handleWindowError = (event) => {
+  if (resizeObserverMessages.some(msg => event?.message?.includes(msg))) {
+    event.stopImmediatePropagation();
+    event.preventDefault();
+  }
+};
+
+const originalConsoleError = console.error;
+console.error = (...args) => {
+  const message = args[0]?.message || args[0] || '';
+  if (typeof message === 'string' && resizeObserverMessages.some(msg => message.includes(msg))) {
+    return;
+  }
+  originalConsoleError(...args);
+};
+
+window.addEventListener('error', handleWindowError);
 
 const Main = () => {
   const [currentTheme, setCurrentTheme] = useState('vs-dark');

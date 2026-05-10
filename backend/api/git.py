@@ -11,7 +11,20 @@ def register_git_routes(app):
             if path == ".":
                 path = os.getcwd()
 
-            # Get branch
+            # Check if .git directory exists
+            is_repo = os.path.exists(os.path.join(path, ".git"))
+            if not is_repo:
+                # Try git rev-parse to be sure (in case of nested or detached)
+                res = subprocess.run(
+                    ["git", "rev-parse", "--is-inside-work-tree"],
+                    cwd=path,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    **get_subprocess_kwargs(),
+                )
+                if res.returncode != 0:
+                    return {"success": True, "changes": [], "branch": None, "is_repo": False}
             branch_res = subprocess.run(
                 ["git", "branch", "--show-current"],
                 cwd=path,
@@ -45,7 +58,7 @@ def register_git_routes(app):
                 file_path = line[3:]
                 changes.append({"file": file_path, "status": status_code})
 
-            return {"success": True, "changes": changes, "branch": branch}
+            return {"success": True, "changes": changes, "branch": branch, "is_repo": True}
         except Exception as e:
             return {"success": False, "error": str(e)}
 
@@ -63,6 +76,8 @@ def register_git_routes(app):
                 cmd.extend(["add"] + args)
             elif action == "restore":
                 cmd.extend(["restore"] + args)
+            elif action == "init":
+                cmd.extend(["init"])
 
             result = subprocess.run(
                 cmd,
@@ -155,6 +170,23 @@ def register_git_routes(app):
             if path == ".":
                 path = os.getcwd()
             
+            full_path = os.path.join(path, file_path)
+            
+            # Simple check for very large files > 5MB to prevent freezing
+            if os.path.exists(full_path) and os.path.getsize(full_path) > 5 * 1024 * 1024:
+                return {"success": True, "original": "File too large to display diff ( > 5MB ).", "modified": "File too large to display diff ( > 5MB )."}
+            
+            # Simple binary check using null bytes
+            is_binary = False
+            if os.path.exists(full_path):
+                with open(full_path, "rb") as bf:
+                    chunk = bf.read(1024)
+                    if b'\0' in chunk:
+                        is_binary = True
+
+            if is_binary:
+                return {"success": True, "original": "Binary file (changes not shown)", "modified": "Binary file (changes not shown)"}
+
             # Read original content from HEAD
             original_res = subprocess.run(
                 ["git", "show", f"HEAD:{file_path}"],
@@ -167,7 +199,6 @@ def register_git_routes(app):
             original = original_res.stdout if original_res.returncode == 0 else ""
             
             # Read current content from file system
-            full_path = os.path.join(path, file_path)
             if os.path.exists(full_path):
                 with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
                     modified = f.read()
@@ -175,5 +206,83 @@ def register_git_routes(app):
                 modified = ""
                 
             return {"success": True, "original": original, "modified": modified}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    @app.expose
+    def get_recent_commits(path=".", limit=5):
+        """Get recent git commits for the activity feed."""
+        try:
+            if path == ".":
+                path = os.getcwd()
+            
+            # check if repo
+            if not os.path.exists(os.path.join(path, ".git")):
+                return {"success": True, "commits": []}
+
+            res = subprocess.run(
+                ["git", "log", f"-n {limit}", "--pretty=format:%h|%an|%ar|%s"],
+                cwd=path,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                **get_subprocess_kwargs(),
+            )
+            
+            if res.returncode != 0:
+                return {"success": False, "error": res.stderr}
+            
+            commits = []
+            for line in res.stdout.splitlines():
+                if not line.strip(): continue
+                hash, author, date, msg = line.split("|", 3)
+                commits.append({"hash": hash, "author": author, "date": date, "message": msg})
+                
+            return {"success": True, "commits": commits}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    @app.expose
+    def generate_commit_message(path="."):
+        """Autogenerate a commit message using AI based on the current diff."""
+        try:
+            if path == ".":
+                path = os.getcwd()
+                
+            # First check if there are staged changes
+            staged_diff = subprocess.run(
+                ["git", "diff", "--cached"],
+                cwd=path, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, **get_subprocess_kwargs()
+            ).stdout
+            
+            diff_to_use = staged_diff
+            if not diff_to_use.strip():
+                # Fallback to unstaged changes if nothing is staged
+                diff_to_use = subprocess.run(
+                    ["git", "diff"],
+                    cwd=path, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, **get_subprocess_kwargs()
+                ).stdout
+                
+            if not diff_to_use.strip():
+                return {"success": False, "error": "No changes found to generate a message."}
+                
+            # Truncate diff if it's too massive
+            if len(diff_to_use) > 15000:
+                diff_to_use = diff_to_use[:15000] + "\n...[diff truncated]..."
+                
+            from backend.services.model_manager import get_model_instance
+            from langchain_core.messages import HumanMessage
+            
+            prompt = f"""
+You are an expert developer. Write a concise, conventional commit message for the following diff.
+Output ONLY the raw commit message (no markdown block, no quotes, no explanations).
+Use conventional commits (feat, fix, docs, style, refactor, test, chore).
+Keep it under 72 characters if possible.
+
+Diff:
+{diff_to_use}
+"""
+            model = get_model_instance("gemini-2.0-flash", temperature=0.2)
+            response = model.invoke([HumanMessage(content=prompt)])
+            return {"success": True, "message": response.content.strip()}
         except Exception as e:
             return {"success": False, "error": str(e)}

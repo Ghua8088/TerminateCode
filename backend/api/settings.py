@@ -7,11 +7,12 @@ _KEYRING_SERVICE = "TerminateCode"
 _KEYRING_KEYS = {
     "google": "google_api_key",
     "openai": "openai_api_key",
-    "anthropic": "anthropic_api_key"
+    "anthropic": "anthropic_api_key",
+    "custom": "custom_api_key"
 }
 
 # In-memory storage for API keys (fallback)
-_server_api_keys = {"google": None, "openai": None, "anthropic": None}
+_server_api_keys = {"google": None, "openai": None, "anthropic": None, "custom": None}
 
 def get_stored_api_key(provider="google"):
     """Retrieve API key from keyring or memory."""
@@ -110,5 +111,15 @@ def register_settings_routes(app):
                 else:
                     status[p] = {"present": False, "masked": ""}
             return {"success": True, "status": status}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    @app.expose
+    def set_custom_ai_config(endpoint: str):
+        """Set the custom AI endpoint."""
+        try:
+            import os
+            os.environ["CUSTOM_AI_ENDPOINT"] = endpoint
+            return {"success": True}
         except Exception as e:
             return {"success": False, "error": str(e)}

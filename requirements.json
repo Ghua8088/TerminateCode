@@ -1,6 +1,7 @@
 {
     "dependencies": [
         "black",
+        "chromadb==1.5.5",
         "google-auth>=2.20.0",
         "google-cloud-aiplatform>=1.26.0",
         "google-genai",
@@ -13,7 +14,7 @@
         "langchain-google-genai",
         "langchain-openai",
         "llama-cpp-python",
-        "pytron-kit==0.3.14.post2",
+        "pytron-kit==0.3.14.post37",
         "pywinpty==3.0.3",
         "requests==2.32.5"
     ],

@@ -2,9 +2,9 @@ import json
 import os
 import hashlib
 
-def _get_workspace_key():
-    """Generate a unique key for the current working directory."""
-    cwd = os.getcwd()
+def _get_workspace_key(path=None):
+    """Generate a unique key for the current working directory or a specific path."""
+    cwd = path or os.getcwd()
     cwd_hash = hashlib.md5(cwd.encode()).hexdigest()[:8]
     return f"workspace_state_{cwd_hash}"
 
@@ -20,7 +20,32 @@ def register_workspace_routes(app):
         try:
             key = _get_workspace_key()
             app.store_set(key, json.dumps(state))
+            # Also update global workspaces index
+            workspaces_key = "global_workspaces_index"
+            workspaces_json = app.store_get(workspaces_key)
+            workspaces = json.loads(workspaces_json) if workspaces_json else {}
+            
+            project_path = os.getcwd()
+            workspaces[project_path] = {
+                "path": project_path,
+                "name": os.path.basename(project_path),
+                "last_accessed": __import__('time').time()
+            }
+            app.store_set(workspaces_key, json.dumps(workspaces))
+            
             return {"success": True}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    @app.expose
+    def list_workspaces():
+        """Get a list of all known workspaces."""
+        try:
+            workspaces_key = "global_workspaces_index"
+            workspaces_json = app.store_get(workspaces_key)
+            if workspaces_json:
+                return {"success": True, "workspaces": json.loads(workspaces_json)}
+            return {"success": True, "workspaces": {}}
         except Exception as e:
             return {"success": False, "error": str(e)}
 
@@ -47,11 +72,12 @@ def register_workspace_routes(app):
             sessions_json = app.store_get(sessions_key)
             sessions = json.loads(sessions_json) if sessions_json else {}
             
+            import time
             # Update/Add session
             sessions[session_id] = {
                 "id": session_id,
                 "title": title or (messages[0]["content"][:30] + "..." if messages else "New Chat"),
-                "timestamp": os.path.getmtime(os.getcwd()) # Use CWD mtime as a surrogate if needed
+                "timestamp": time.time()
             }
             
             # Save index and separate session blob
