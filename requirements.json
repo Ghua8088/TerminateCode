@@ -14,7 +14,7 @@
         "langchain-google-genai",
         "langchain-openai",
         "llama-cpp-python",
-        "pytron-kit==0.3.14.post37",
+        "pytron-kit==0.3.14",
         "pywinpty==3.0.3",
         "requests==2.32.5"
     ],

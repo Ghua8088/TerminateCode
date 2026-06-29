@@ -182,8 +182,13 @@ kernel = ExternalKernel()
 # Global server state for this module
 server_state = {"httpd": None, "thread": None}
 
+# Global Pytron App instance reference for AI tools
+global_app = None
+
 
 def register_system_routes(app):
+    global global_app
+    global_app = app
 
     @app.expose
     def get_system_info():

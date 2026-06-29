@@ -2,6 +2,10 @@
 import sys
 import os
 
+# Force standard output to UTF-8 to prevent charmap encoding crashes on Windows consoles
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+
 # Add the project root to sys.path to allow backend imports
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 

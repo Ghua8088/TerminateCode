@@ -48,24 +48,33 @@ const BreadcrumbItem = ({ name, path, isFile, isRoot, onFileOpen }) => {
             {isOpen && !isFile && rect && createPortal(
                 <div className="breadcrumb-dropdown" style={{
                     position: 'fixed',
-                    top: rect.bottom + 4,
+                    top: rect.bottom + 6,
                     left: rect.left,
-                    background: 'var(--bg-secondary)',
-                    border: '1px solid var(--border-color)',
-                    boxShadow: 'var(--shadow-lg)',
+                    background: 'rgba(18, 18, 22, 0.92)',
+                    backdropFilter: 'blur(16px)',
+                    WebkitBackdropFilter: 'blur(16px)',
+                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                    boxShadow: '0 12px 36px rgba(0, 0, 0, 0.55)',
                     zIndex: 9999,
-                    padding: '4px 0',
-                    borderRadius: 'var(--radius-sm)',
-                    minWidth: '200px',
+                    padding: '6px 0',
+                    borderRadius: 'var(--radius-md)',
+                    minWidth: '220px',
                     maxHeight: '300px',
                     overflowY: 'auto'
                 }}>
                     {items.map((item, idx) => (
                         <div key={idx} style={{
-                            padding: '6px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', color: '#ccc'
+                            padding: '8px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '12px', color: '#d4d4d8',
+                            transition: 'all 0.12s ease'
                         }}
-                        onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--accent-color)'}
-                        onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                        onMouseEnter={e => {
+                            e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.06)';
+                            e.currentTarget.style.color = '#ffffff';
+                        }}
+                        onMouseLeave={e => {
+                            e.currentTarget.style.backgroundColor = 'transparent';
+                            e.currentTarget.style.color = '#d4d4d8';
+                        }}
                         onClick={(e) => {
                             e.stopPropagation();
                             if (!item.is_dir && onFileOpen) {
@@ -73,11 +82,11 @@ const BreadcrumbItem = ({ name, path, isFile, isRoot, onFileOpen }) => {
                             }
                             setIsOpen(false);
                         }}>
-                            {item.is_dir ? <Folder size={11} color="#dcb67a" /> : <FileCode size={11} color="#4fc1ff" />}
+                            {item.is_dir ? <Folder size={12} color="#dcb67a" /> : <FileCode size={12} color="#60a5fa" />}
                             <span style={{ flex: 1, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{item.name}</span>
                         </div>
                     ))}
-                    {items.length === 0 && <div style={{ padding: '6px 12px', color: '#666', fontStyle: 'italic', fontSize: '11px' }}>Empty folder</div>}
+                    {items.length === 0 && <div style={{ padding: '8px 14px', color: '#71717a', fontStyle: 'italic', fontSize: '12px' }}>Empty folder</div>}
                 </div>,
                 document.body
             )}

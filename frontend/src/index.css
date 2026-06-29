@@ -1,17 +1,19 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
 
 :root {
-  --bg: #0f0f11;
-  --surface: #18181b;
-  --secondary: #27272a;
-  --border: #3f3f46;
-  --accent: #3b82f6;
-  --accent-glow: rgba(59, 130, 246, 0.5);
+  --bg: #09090b;
+  --surface: #121215;
+  --secondary: #18181b;
+  --border: rgba(255, 255, 255, 0.08);
+  --accent: #6366f1;
+  --accent-glow: rgba(99, 102, 241, 0.35);
+  --accent-cyan: #06b6d4;
+  --accent-cyan-glow: rgba(6, 182, 212, 0.35);
   --fg: #f4f4f5;
   --fg-muted: #a1a1aa;
-  --error: #ef4444;
-  --success: #10b981;
-  --warning: #f59e0b;
+  --error: #f87171;
+  --success: #34d399;
+  --warning: #fbbf24;
 }
 
 * {

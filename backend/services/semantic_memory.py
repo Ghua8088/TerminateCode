@@ -8,15 +8,27 @@ except ImportError:
 
 class SemanticIndexer:
     def __init__(self, workspace_path="."):
-        self.workspace_path = workspace_path
-        self.db_path = os.path.join(workspace_path, ".terminate_db")
+        self.workspace_path = os.path.abspath(workspace_path)
         
+        # Centralized isolated AppData database path keyed by workspace path hash
+        import hashlib
+        path_hash = hashlib.sha256(self.workspace_path.encode('utf-8')).hexdigest()
+        user_home = os.path.expanduser("~")
+        
+        # Ensure collection directory is isolated outside project workspace
+        self.db_path = os.path.join(user_home, ".terminatecode", "collections", path_hash)
+        
+        # Fallback to local .terminate_db if it already exists to maintain backward compatibility
+        local_db = os.path.join(self.workspace_path, ".terminate_db")
+        if os.path.exists(local_db):
+            self.db_path = local_db
+            
         # Ensure chromadb is available; fail gracefully if not
         if chromadb is None:
             self.collection = None
             return
             
-        # Initialize the local persistent ChromaDB client
+        # Initialize the persistent ChromaDB client
         self.client = chromadb.PersistentClient(path=self.db_path)
         
         # Get or create the codebase vector collection
@@ -24,8 +36,50 @@ class SemanticIndexer:
             name="workspace_codebase"
         )
 
-    def chunk_file(self, content, max_length=1500):
-        """Splits file content into rough chunks to avoid massive vectors."""
+    def chunk_file(self, content, max_length=1500, file_ext='.py'):
+        """Splits file content into syntax-aware chunks where possible."""
+        # For Python files, parse using AST to preserve class and function definitions
+        if file_ext == '.py':
+            try:
+                import ast
+                tree = ast.parse(content)
+                chunks = []
+                lines = content.splitlines()
+                current_chunk = []
+                current_len = 0
+                
+                # Iterate through top-level nodes (classes, functions, statements)
+                for node in ast.iter_child_nodes(tree):
+                    if hasattr(node, 'lineno') and hasattr(node, 'end_lineno'):
+                        node_src = "\n".join(lines[node.lineno - 1:node.end_lineno])
+                        # If node itself is larger than max_length, split it or add as own chunk
+                        if len(node_src) > max_length:
+                            if current_chunk:
+                                chunks.append("\n".join(current_chunk))
+                                current_chunk = []
+                                current_len = 0
+                            # Simple character chunking fallback for very large blocks
+                            for j in range(0, len(node_src), max_length):
+                                chunks.append(node_src[j:j + max_length])
+                        else:
+                            if current_len + len(node_src) > max_length:
+                                chunks.append("\n".join(current_chunk))
+                                current_chunk = [node_src]
+                                current_len = len(node_src)
+                            else:
+                                current_chunk.append(node_src)
+                                current_len += len(node_src)
+                
+                if current_chunk:
+                    chunks.append("\n".join(current_chunk))
+                
+                if chunks:
+                    return chunks
+            except Exception:
+                # Fallback to standard chunking on syntax errors
+                pass
+                
+        # Standard character chunking fallback for all other files
         chunks = []
         for i in range(0, len(content), max_length):
             chunks.append(content[i:i + max_length])
@@ -59,7 +113,8 @@ class SemanticIndexer:
                     if not content.strip():
                         continue
                         
-                    chunks = self.chunk_file(content)
+                    ext = os.path.splitext(file)[1].lower()
+                    chunks = self.chunk_file(content, file_ext=ext)
                     for i, chunk in enumerate(chunks):
                         doc_id = f"{rel_path}_{i}"
                         docs_to_upsert.append(chunk)

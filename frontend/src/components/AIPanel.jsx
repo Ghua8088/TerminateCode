@@ -6,7 +6,7 @@ import {
     Send, Bot, User, Trash2, Plus, Sparkles, MessageSquare,
     History, ChevronRight, ChevronDown, ChevronUp, Mic,
     ShieldAlert, X, Square, Loader2, Lightbulb, RotateCcw,
-    Brain, Download, Search
+    Brain, Download, Search, Terminal, LayoutGrid
 } from 'lucide-react';
 import { useToast, useTheme } from 'pytron-ui/react';
 import ConfirmModal from './ConfirmModal';
@@ -123,31 +123,31 @@ const ModelHubModal = ({ isOpen, onClose, onModelAdded }) => {
     return (
         <div style={{
             position: 'absolute', inset: 0, zIndex: 1000, 
-            background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)',
+            background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
             display: 'flex', alignItems: 'center', justifyContent: 'center'
         }}>
             <div style={{
-                background: '#1e1e1e', borderRadius: '12px', border: '1px solid #333',
+                background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)',
                 width: '600px', maxWidth: '90%', maxHeight: '80%', display: 'flex', flexDirection: 'column',
-                boxShadow: '0 12px 40px rgba(0,0,0,0.4)', overflow: 'hidden'
+                boxShadow: 'var(--shadow-lg)', overflow: 'hidden'
             }}>
-                <div style={{ padding: '16px', borderBottom: '1px solid #333', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#a855f7', fontWeight: 'bold' }}>
+                <div style={{ padding: '16px', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent)', fontWeight: 'bold' }}>
                         <Brain size={18} /> HuggingFace GGUF Hub
                     </div>
-                    <X size={18} style={{ cursor: 'pointer', color: '#888' }} onClick={onClose} />
+                    <X size={18} style={{ cursor: 'pointer', color: 'var(--text-secondary)' }} onClick={onClose} />
                 </div>
                 
                 <div style={{ padding: '16px', display: 'flex', gap: '8px' }}>
                     <input 
-                        value={query}
-                        onChange={e => setQuery(e.target.value)}
-                        onKeyDown={e => e.key === 'Enter' && handleSearch()}
-                        placeholder="Search models (e.g., Llama-3, Phi-3, Mistral)"
-                        className="sleek-input"
-                        style={{ flex: 1, padding: '8px 12px', background: '#252526', border: '1px solid #333', borderRadius: '6px', color: '#fff' }}
+                         value={query}
+                         onChange={e => setQuery(e.target.value)}
+                         onKeyDown={e => e.key === 'Enter' && handleSearch()}
+                         placeholder="Search models (e.g., Llama-3, Phi-3, Mistral)"
+                         className="sleek-input"
+                         style={{ flex: 1, padding: '8px 12px', background: 'var(--bg-primary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', color: '#fff' }}
                     />
-                    <button onClick={handleSearch} disabled={loading} className="sleek-button primary" style={{ padding: '0 16px', borderRadius: '6px' }}>
+                    <button onClick={handleSearch} disabled={loading} className="sleek-button primary" style={{ padding: '0 16px', borderRadius: 'var(--radius-sm)' }}>
                         <Search size={16} />
                     </button>
                 </div>
@@ -158,9 +158,9 @@ const ModelHubModal = ({ isOpen, onClose, onModelAdded }) => {
                     {!selectedRepo ? (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                             {results.map((m, i) => (
-                                <div key={i} onClick={() => handleSelectRepo(m.id)} className="hover-bg" style={{ padding: '12px', border: '1px solid #333', borderRadius: '6px', cursor: 'pointer' }}>
+                                <div key={i} onClick={() => handleSelectRepo(m.id)} className="hover-bg" style={{ padding: '12px', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', cursor: 'pointer' }}>
                                     <div style={{ fontWeight: 'bold', color: '#e0e0e0' }}>{m.id}</div>
-                                    <div style={{ fontSize: '11px', color: '#888', marginTop: '4px' }}>
+                                    <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '4px' }}>
                                         Downloads: {m.downloads.toLocaleString()} | Tags: {m.tags.filter(t=>['gguf', 'llama-cpp'].includes(t)).join(', ')}
                                     </div>
                                 </div>
@@ -168,20 +168,20 @@ const ModelHubModal = ({ isOpen, onClose, onModelAdded }) => {
                         </div>
                     ) : (
                         <div>
-                            <div style={{ marginBottom: '12px', display: 'flex', gap: '8px', cursor: 'pointer', color: '#a855f7', fontSize: '12px' }} onClick={() => setSelectedRepo(null)}>
+                            <div style={{ marginBottom: '12px', display: 'flex', gap: '8px', cursor: 'pointer', color: 'var(--accent)', fontSize: '12.5px', fontWeight: '500' }} onClick={() => setSelectedRepo(null)}>
                                 ← Back to results
                             </div>
                             <h4 style={{ margin: '0 0 12px 0', color: '#fff' }}>Files for {selectedRepo}</h4>
-                            {repoFiles.length === 0 && !loading && <div style={{ color: '#888' }}>No .gguf files found in root tree.</div>}
+                            {repoFiles.length === 0 && !loading && <div style={{ color: 'var(--text-secondary)' }}>No .gguf files found in root tree.</div>}
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                 {repoFiles.map((f, i) => (
-                                    <div key={i} style={{ padding: '12px', border: '1px solid #333', borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <div key={i} style={{ padding: '12px', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                         <div style={{ wordBreak: 'break-all', fontSize: '13px', color: '#e0e0e0' }}>{f.path}</div>
                                         <button 
                                             onClick={() => handleDownload(f.path)}
                                             disabled={downloading}
                                             className="sleek-button"
-                                            style={{ background: downloading ? '#333' : '#a855f7', color: '#fff', padding: '6px 12px', borderRadius: '4px', fontSize: '12px', display: 'flex', gap: '6px' }}
+                                            style={{ background: downloading ? 'var(--bg-tertiary)' : 'var(--accent)', color: '#fff', padding: '6px 12px', borderRadius: 'var(--radius-sm)', fontSize: '12px', display: 'flex', gap: '6px' }}
                                         >
                                             <Download size={14} /> Download
                                         </button>
@@ -190,15 +190,15 @@ const ModelHubModal = ({ isOpen, onClose, onModelAdded }) => {
                             </div>
 
                             {downloading && progressInfo && (
-                                <div style={{ marginTop: '20px', padding: '16px', background: '#252526', borderRadius: '6px', border: '1px solid #444' }}>
+                                <div style={{ marginTop: '20px', padding: '16px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)' }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '8px', color: '#ccc' }}>
                                         <span>Downloading {progressInfo.filename}</span>
                                         <span>{progressInfo.progress}%</span>
                                     </div>
-                                    <div style={{ height: '6px', background: '#111', borderRadius: '3px', overflow: 'hidden' }}>
-                                        <div style={{ height: '100%', width: `${progressInfo.progress}%`, background: '#a855f7', transition: 'width 0.3s' }}></div>
+                                    <div style={{ height: '6px', background: 'rgba(0,0,0,0.3)', borderRadius: '3px', overflow: 'hidden' }}>
+                                        <div style={{ height: '100%', width: `${progressInfo.progress}%`, background: 'var(--accent)', transition: 'width 0.3s' }}></div>
                                     </div>
-                                    <div style={{ fontSize: '11px', color: '#888', marginTop: '8px', textAlign: 'right' }}>
+                                    <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '8px', textAlign: 'right' }}>
                                         {progressInfo.downloaded_mb} MB / {progressInfo.total_mb} MB
                                     </div>
                                 </div>
@@ -380,7 +380,7 @@ const ToolCallMessage = ({ msg, expanded, onToggle, onAllow, onDeny }) => {
     );
 };
 
-const AIPanel = ({ activePath, onClose, messages: externalMessages, setMessages: setExternalMessages }) => {
+const AIPanel = ({ activePath, onClose, messages: externalMessages, setMessages: setExternalMessages, cursorInfo }) => {
     const [internalMessages, setInternalMessages] = useState([]);
     const messages = externalMessages || internalMessages;
     const setMessages = setExternalMessages || setInternalMessages;
@@ -396,6 +396,7 @@ const AIPanel = ({ activePath, onClose, messages: externalMessages, setMessages:
     const [showHistory, setShowHistory] = useState(false);
     const [showClearConfirm, setShowClearConfirm] = useState(false);
     const [showModelHub, setShowModelHub] = useState(false);
+    const [activeTab, setActiveTab] = useState('chat');
     const messagesEndRef = useRef(null);
 
     const fetchModels = async () => {
@@ -581,7 +582,21 @@ const AIPanel = ({ activePath, onClose, messages: externalMessages, setMessages:
                 try {
                     const fileRes = await pytron.read_file_content(activePath);
                     if (fileRes.success) {
-                        prompt = `Context: Current file is ${activePath.split(/[\\/]/).pop()}\n\nCode:\n\`\`\`\n${fileRes.content}\n\`\`\`\n\nUser Question: ${input}`;
+                        const fileContent = fileRes.content || '';
+                        const lines = fileContent.split('\n');
+                        
+                        // If file is large (e.g. > 150 lines) and cursorInfo is present, inject targeted window context
+                        if (lines.length > 150 && cursorInfo && cursorInfo.line) {
+                            const curLine = cursorInfo.line;
+                            const start = Math.max(0, curLine - 50);
+                            const end = Math.min(lines.length, curLine + 50);
+                            const slice = lines.slice(start, end).join('\n');
+                            const fileName = activePath.split(/[\\/]/).pop();
+                            
+                            prompt = `Context: Active file is "${fileName}" (showing lines ${start + 1}-${end} surrounding cursor at line ${curLine}).\n\nCode Slice:\n\`\`\`\n${slice}\n\`\`\`\n\nUser Question: ${input}`;
+                        } else {
+                            prompt = `Context: Current file is ${activePath.split(/[\\/]/).pop()}\n\nCode:\n\`\`\`\n${fileContent}\n\`\`\`\n\nUser Question: ${input}`;
+                        }
                     }
                 } catch (e) { console.error('Failed to read context file', e); }
             }
@@ -664,21 +679,25 @@ const AIPanel = ({ activePath, onClose, messages: externalMessages, setMessages:
             <div className="panel-header">
                 <div className="panel-header-title">
                     <Sparkles size={14} style={{ color: 'var(--accent-color)' }} />
-                    <span>CHAT</span>
+                    <span>{activeTab.toUpperCase()}</span>
                 </div>
-                <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                    <button className="sleek-button" onClick={handleRollback} title="Rollback Last AI Change">
-                        <RotateCcw size={14} />
-                    </button>
-                    <button className="sleek-button" onClick={() => setShowHistory(!showHistory)} title="Chat History">
-                        <History size={14} />
-                    </button>
-                    <button className="sleek-button" onClick={handleNewChat} title="New Chat">
-                        <Plus size={14} />
-                    </button>
-                    <button className="sleek-button" onClick={clearChat} title="Clear Current">
-                        <Trash2 size={14} />
-                    </button>
+                <div style={{ display: 'flex', gap: '4px', alignItems: 'center', marginLeft: activeTab !== 'chat' ? 'auto' : '0' }}>
+                    {activeTab === 'chat' && (
+                        <>
+                            <button className="sleek-button" onClick={handleRollback} title="Rollback Last AI Change">
+                                <RotateCcw size={14} />
+                            </button>
+                            <button className="sleek-button" onClick={() => setShowHistory(!showHistory)} title="Chat History">
+                                <History size={14} />
+                            </button>
+                            <button className="sleek-button" onClick={handleNewChat} title="New Chat">
+                                <Plus size={14} />
+                            </button>
+                            <button className="sleek-button" onClick={clearChat} title="Clear Current">
+                                <Trash2 size={14} />
+                            </button>
+                        </>
+                    )}
                     {onClose && (
                         <button className="sleek-button" onClick={onClose} title="Close Panel">
                             <X size={14} />
@@ -687,7 +706,48 @@ const AIPanel = ({ activePath, onClose, messages: externalMessages, setMessages:
                 </div>
             </div>
 
-            {showHistory && (
+            {/* Control Room Tab Selector */}
+            <div className="ai-tabs-bar" style={{
+                display: 'flex',
+                background: 'var(--bg-secondary)',
+                borderBottom: '1px solid var(--border-color)',
+                padding: '4px 8px',
+                gap: '4px'
+            }}>
+                {[
+                    { id: 'chat', label: 'Chat', icon: <MessageSquare size={13} /> },
+                    { id: 'terminal', label: 'Terminal', icon: <Terminal size={13} /> },
+                    { id: 'apply', label: 'Apply', icon: <Sparkles size={13} /> },
+                    { id: 'tools', label: 'Tools', icon: <LayoutGrid size={13} /> }
+                ].map(tab => (
+                    <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id)}
+                        className={`ai-tab-btn ${activeTab === tab.id ? 'active' : ''}`}
+                        style={{
+                            flex: 1,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '6px',
+                            padding: '6px 4px',
+                            fontSize: '11px',
+                            fontWeight: '600',
+                            borderRadius: '6px',
+                            border: '1px solid transparent',
+                            background: activeTab === tab.id ? 'rgba(255, 255, 255, 0.06)' : 'transparent',
+                            color: activeTab === tab.id ? 'var(--text-active)' : 'var(--text-secondary)',
+                            cursor: 'pointer',
+                            transition: 'all 0.15s ease'
+                        }}
+                    >
+                        {tab.icon}
+                        <span>{tab.label}</span>
+                    </button>
+                ))}
+            </div>
+
+            {showHistory && activeTab === 'chat' && (
                 <div style={{
                     flexShrink: 0,
                     maxHeight: '32%',
@@ -725,239 +785,535 @@ const AIPanel = ({ activePath, onClose, messages: externalMessages, setMessages:
                 </div>
             )}
 
-            <div className="ai-messages-shell" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-                <div className="ai-messages-viewport" style={{ flex: 1, overflowY: 'auto' }}>
-                {messages.length === 0 && (
-                    <div className="ai-empty-state">
-                        <Bot size={48} style={{ opacity: 0.2, marginBottom: '16px' }} />
-                        <p>Ask the AI assistant to explain code, fix bugs, or write something new.</p>
-                    </div>
-                )}
-                {messages.map((msg, idx) => {
-                    const isTool = msg.role === 'tool_call';
-                    const messageKey = msg.id || `msg-${idx}`;
-                    
-                    if (isTool) {
-                        return (
-                            <ToolCallMessage 
-                                key={messageKey}
-                                msg={msg}
-                                expanded={expandedTools[msg.id]}
-                                onToggle={() => setExpandedTools(prev => ({ ...prev, [msg.id]: !prev[msg.id] }))}
-                                onAllow={() => {
-                                    pytron.confirm_tool(msg.id, true).then(() => {
-                                        setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, pendingAuth: null } : m));
-                                    });
-                                }}
-                                onDeny={() => {
-                                    pytron.confirm_tool(msg.id, false).then(() => {
-                                        setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, pendingAuth: null } : m));
-                                    });
-                                }}
-                            />
-                        );
-                    }
-
-                    const isUser = msg.role === 'user';
-                    
-                    const renderContent = (content) => {
-                        const markdownComponents = {
-                            code({node, inline, className, children, ...props}) {
-                                return !inline ? (
-                                    <div className="ai-markdown-codeblock">
-                                        <code className={className} {...props}>{children}</code> 
-                                    </div>
-                                ) : (
-                                    <code className={`ai-markdown-inline-code ${className || ''}`.trim()} {...props}>{children}</code>
-                                )
-                            }
-                        };
-
-                        if (!content.includes('<think>')) {
-                            return <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{content}</ReactMarkdown>;
+            {/* Chat Tab View */}
+            {activeTab === 'chat' && (
+                <div className="ai-messages-shell" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+                    <div className="ai-messages-viewport" style={{ flex: 1, overflowY: 'auto' }}>
+                    {messages.length === 0 && (
+                        <div className="ai-empty-state">
+                            <Bot size={48} style={{ opacity: 0.2, marginBottom: '16px' }} />
+                            <p>Ask the AI assistant to explain code, fix bugs, or write something new.</p>
+                        </div>
+                    )}
+                    {messages.map((msg, idx) => {
+                        const isTool = msg.role === 'tool_call';
+                        const messageKey = msg.id || `msg-${idx}`;
+                        
+                        if (isTool) {
+                            return (
+                                <ToolCallMessage 
+                                    key={messageKey}
+                                    msg={msg}
+                                    expanded={expandedTools[msg.id]}
+                                    onToggle={() => setExpandedTools(prev => ({ ...prev, [msg.id]: !prev[msg.id] }))}
+                                    onAllow={() => {
+                                        pytron.confirm_tool(msg.id, true).then(() => {
+                                            setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, pendingAuth: null } : m));
+                                        });
+                                    }}
+                                    onDeny={() => {
+                                        pytron.confirm_tool(msg.id, false).then(() => {
+                                            setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, pendingAuth: null } : m));
+                                        });
+                                    }}
+                                />
+                            );
                         }
 
-                        const parts = content.split(/(<think>[\s\S]*?(?:<\/think>|$))/gi);
-                        return parts.map((part, index) => {
-                            if (part.toLowerCase().startsWith('<think>')) {
-                                const thinkContent = part.replace(/^<think>/i, '').replace(/<\/think>$/i, '');
-                                return (
-                                    <ThinkBlock key={index}>
-                                        <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{thinkContent}</ReactMarkdown>
-                                    </ThinkBlock>
-                                );
-                            }
-                            if (part.trim() || part.includes('\n')) {
-                                return <ReactMarkdown key={index} remarkPlugins={[remarkGfm]} components={markdownComponents}>{part}</ReactMarkdown>;
-                            }
-                            return null;
-                        });
-                    };
+                        const isUser = msg.role === 'user';
+                        
+                        const renderContent = (content) => {
+                            const markdownComponents = {
+                                code({node, inline, className, children, ...props}) {
+                                    return !inline ? (
+                                        <div className="ai-markdown-codeblock">
+                                            <code className={className} {...props}>{children}</code> 
+                                        </div>
+                                    ) : (
+                                        <code className={`ai-markdown-inline-code ${className || ''}`.trim()} {...props}>{children}</code>
+                                    )
+                                }
+                            };
 
-                    return (
-                        <div key={messageKey} className={`chat-bubble ${isUser ? 'user' : 'ai'}`}>
-                            {!isUser && (
-                                <div style={{ 
-                                    display: 'flex', 
-                                    gap: '6px', 
-                                    marginBottom: '6px', 
-                                    alignItems: 'center',
-                                    color: 'var(--accent-color)', 
-                                    fontSize: '11px', fontWeight: '600' 
-                                }}>
-                                    <Bot size={12} />
-                                    <span>ASSISTANT</span>
+                            if (!content.includes('<think>')) {
+                                return <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{content}</ReactMarkdown>;
+                            }
+
+                            const parts = content.split(/(<think>[\s\S]*?(?:<\/think>|$))/gi);
+                            return parts.map((part, index) => {
+                                if (part.toLowerCase().startsWith('<think>')) {
+                                    const thinkContent = part.replace(/^<think>/i, '').replace(/<\/think>$/i, '');
+                                    return (
+                                        <ThinkBlock key={index}>
+                                            <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{thinkContent}</ReactMarkdown>
+                                        </ThinkBlock>
+                                    );
+                                }
+                                if (part.trim() || part.includes('\n')) {
+                                    return <ReactMarkdown key={index} remarkPlugins={[remarkGfm]} components={markdownComponents}>{part}</ReactMarkdown>;
+                                }
+                                return null;
+                            });
+                        };
+
+                        return (
+                            <div key={messageKey} className={`chat-bubble ${isUser ? 'user' : 'ai'}`}>
+                                {!isUser && (
+                                    <div style={{ 
+                                        display: 'flex', 
+                                        gap: '6px', 
+                                        marginBottom: '6px', 
+                                        alignItems: 'center',
+                                        color: 'var(--accent-color)', 
+                                        fontSize: '11px', fontWeight: '600' 
+                                    }}>
+                                        <Bot size={12} />
+                                        <span>ASSISTANT</span>
+                                    </div>
+                                )}
+                                <div className="ai-markdown">
+                                    {renderContent(msg.content || '')}
                                 </div>
-                            )}
-                            <div className="ai-markdown">
-                                {renderContent(msg.content || '')}
+                            </div>
+                        );
+                    })}
+                    {loading && (
+                        <div style={{ display: 'flex', gap: '8px', padding: '12px', alignItems: 'center', color: 'var(--text-secondary)' }}>
+                            <Loader2 size={16} className="animate-spin" />
+                            <span style={{ fontSize: '12px' }}>Thinking...</span>
+                        </div>
+                    )}
+                    <div ref={messagesEndRef} />
+                    </div>
+                </div>
+            )}
+
+            {/* Terminal Tab View */}
+            {activeTab === 'terminal' && (
+                <div className="ai-terminal-tab" style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {messages.filter(msg => msg.role === 'tool_call' && (msg.name === 'execute_command' || msg.name === 'run_command')).length === 0 ? (
+                        <div className="ai-empty-state">
+                            <Terminal size={36} style={{ opacity: 0.2, marginBottom: '12px' }} />
+                            <p>No terminal commands run by the AI in this session yet.</p>
+                        </div>
+                    ) : (
+                        messages.filter(msg => msg.role === 'tool_call' && (msg.name === 'execute_command' || msg.name === 'run_command')).map((msg, idx) => {
+                            const isCompleted = msg.result !== undefined;
+                            const isPending = !!msg.pendingAuth;
+                            const isRunning = !isCompleted && !isPending && !msg.error;
+                            let statusText = 'running';
+                            let statusColor = '#3b82f6';
+                            if (isPending) {
+                                statusText = 'awaiting approval';
+                                statusColor = '#f59e0b';
+                            } else if (isCompleted) {
+                                statusText = 'completed';
+                                statusColor = '#10b981';
+                            }
+                            
+                            let displayArgs = msg.args;
+                            try {
+                                if (typeof msg.args === 'string') displayArgs = JSON.parse(msg.args);
+                            } catch(e) {}
+                            const commandText = displayArgs?.command || displayArgs?.cmd || summarizeToolCall(msg.name, displayArgs);
+                            const returnCode = displayArgs?.returncode ?? (msg.result?.includes("exit code") || msg.result?.includes("Error") ? 1 : 0);
+
+                            return (
+                                <div key={msg.id || idx} style={{
+                                    background: 'rgba(0, 0, 0, 0.25)',
+                                    border: `1px solid ${isPending ? 'rgba(245,158,11,0.25)' : 'rgba(255,255,255,0.06)'}`,
+                                    borderRadius: '10px',
+                                    padding: '12px',
+                                    fontFamily: 'JetBrains Mono, monospace'
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', fontSize: '11px' }}>
+                                        <span style={{ color: statusColor, fontWeight: 'bold', textTransform: 'uppercase' }}>{statusText}</span>
+                                        <span style={{ color: 'var(--text-secondary)' }}>Code: {isCompleted ? returnCode : '-'}</span>
+                                    </div>
+                                    <div style={{ background: '#09090b', padding: '8px 10px', borderRadius: '6px', color: '#60a5fa', fontSize: '12px', marginBottom: '8px', border: '1px solid rgba(255,255,255,0.04)' }}>
+                                        $ {commandText}
+                                    </div>
+                                    {isCompleted && (
+                                        <pre style={{ margin: 0, padding: '8px', background: 'rgba(0,0,0,0.15)', color: '#e5e7eb', fontSize: '11px', maxHeight: '180px', overflowY: 'auto', borderRadius: '6px', whiteSpace: 'pre-wrap', border: '1px solid rgba(255,255,255,0.03)' }}>
+                                            {msg.result || "(No output)"}
+                                        </pre>
+                                    )}
+                                    {isPending && (
+                                        <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                                            <button 
+                                                onClick={() => {
+                                                    pytron.confirm_tool(msg.id, true).then(() => {
+                                                        setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, pendingAuth: null } : m));
+                                                    });
+                                                }}
+                                                style={{ flex: 1, padding: '6px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}
+                                            >
+                                                Approve
+                                            </button>
+                                            <button 
+                                                onClick={() => {
+                                                    pytron.confirm_tool(msg.id, false).then(() => {
+                                                        setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, pendingAuth: null } : m));
+                                                    });
+                                                }}
+                                                style={{ flex: 1, padding: '6px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}
+                                            >
+                                                Deny
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })
+                    )}
+                </div>
+            )}
+
+            {/* Apply Tab View */}
+            {activeTab === 'apply' && (
+                <div className="ai-apply-tab" style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                        <button 
+                            onClick={handleRollback}
+                            className="sleek-button primary"
+                            style={{ width: '100%', padding: '8px', display: 'flex', gap: '6px', justifyContent: 'center', fontSize: '12px', fontWeight: 'bold', background: 'var(--accent-color)' }}
+                        >
+                            <RotateCcw size={14} />
+                            Rollback Last AI Change
+                        </button>
+                    </div>
+                    {messages.filter(msg => msg.role === 'tool_call' && (msg.name === 'apply_patch' || msg.pendingAuth?.diff)).length === 0 ? (
+                        <div className="ai-empty-state">
+                            <Sparkles size={36} style={{ opacity: 0.2, marginBottom: '12px' }} />
+                            <p>No code patches generated in this session yet.</p>
+                        </div>
+                    ) : (
+                        messages.filter(msg => msg.role === 'tool_call' && (msg.name === 'apply_patch' || msg.pendingAuth?.diff)).map((msg, idx) => {
+                            const isCompleted = msg.result !== undefined;
+                            const isPending = !!msg.pendingAuth;
+                            const diffContent = msg.pendingAuth?.diff || (msg.result?.includes("staged") || msg.result?.includes("applied") || msg.result?.includes("Successfully") ? msg.result : "");
+
+                            let displayArgs = msg.args;
+                            try {
+                                if (typeof msg.args === 'string') displayArgs = JSON.parse(msg.args);
+                            } catch(e) {}
+                            const filePath = displayArgs?.path || displayArgs?.filepath || "Target File";
+                            
+                            return (
+                                <div key={msg.id || idx} style={{
+                                    background: 'rgba(0, 0, 0, 0.25)',
+                                    border: `1px solid ${isPending ? 'rgba(245,158,11,0.25)' : 'rgba(255,255,255,0.06)'}`,
+                                    borderRadius: '10px',
+                                    padding: '12px'
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', fontSize: '11px' }}>
+                                        <span style={{ color: 'var(--text-active)', fontWeight: 'bold', fontFamily: 'JetBrains Mono, monospace', wordBreak: 'break-all' }}>
+                                            {filePath.split(/[\\/]/).pop()}
+                                        </span>
+                                        <span style={{
+                                            fontSize: '9px',
+                                            padding: '2px 6px',
+                                            borderRadius: '99px',
+                                            background: isPending ? 'rgba(245,158,11,0.12)' : 'rgba(16,185,129,0.12)',
+                                            color: isPending ? '#fbbf24' : '#10b981',
+                                            border: `1px solid ${isPending ? 'rgba(245,158,11,0.2)' : 'rgba(16,185,129,0.2)'}`
+                                        }}>
+                                            {isPending ? 'Awaiting Review' : 'Applied'}
+                                        </span>
+                                    </div>
+                                    
+                                    {diffContent && (
+                                        <div style={{
+                                            maxHeight: '220px',
+                                            overflowY: 'auto',
+                                            background: '#09090b',
+                                            borderRadius: '6px',
+                                            border: '1px solid rgba(255,255,255,0.05)',
+                                            marginBottom: '8px'
+                                        }}>
+                                            <pre style={{
+                                                margin: 0,
+                                                padding: '8px 10px',
+                                                fontFamily: 'JetBrains Mono, monospace',
+                                                fontSize: '11px',
+                                                lineHeight: 1.5,
+                                                whiteSpace: 'pre-wrap',
+                                                color: '#e2e8f0'
+                                            }}>
+                                                {diffContent.split('\n').map((line, lIdx) => {
+                                                    const isAdd = line.startsWith('+');
+                                                    const isDel = line.startsWith('-');
+                                                    const lineBg = isAdd ? 'rgba(16,185,129,0.15)' : isDel ? 'rgba(239,68,68,0.15)' : 'transparent';
+                                                    const lineColor = isAdd ? '#34d399' : isDel ? '#f87171' : 'inherit';
+                                                    return (
+                                                        <div key={lIdx} style={{ background: lineBg, color: lineColor, padding: '1px 4px' }}>
+                                                            {line}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </pre>
+                                        </div>
+                                    )}
+
+                                    {isPending && (
+                                        <div style={{ display: 'flex', gap: '8px' }}>
+                                            <button 
+                                                onClick={() => {
+                                                    pytron.confirm_tool(msg.id, true).then(() => {
+                                                        setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, pendingAuth: null } : m));
+                                                    });
+                                                }}
+                                                style={{ flex: 1, padding: '6px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}
+                                            >
+                                                Approve Patch
+                                            </button>
+                                            <button 
+                                                onClick={() => {
+                                                    pytron.confirm_tool(msg.id, false).then(() => {
+                                                        setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, pendingAuth: null } : m));
+                                                    });
+                                                }}
+                                                style={{ flex: 1, padding: '6px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}
+                                            >
+                                                Reject Patch
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })
+                    )}
+                </div>
+            )}
+
+            {/* Tools Tab View */}
+            {activeTab === 'tools' && (
+                <div className="ai-tools-tab" style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    <div style={{
+                        background: 'rgba(255, 255, 255, 0.02)',
+                        border: '1px solid rgba(255, 255, 255, 0.05)',
+                        borderRadius: '12px',
+                        padding: '14px'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                            <Bot size={16} color="var(--accent-color)" />
+                            <span style={{ fontSize: '13px', fontWeight: '700', color: '#fff' }}>Active Runtime</span>
+                        </div>
+                        
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '10px', color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '4px' }}>Active LLM Provider</label>
+                                <div style={{
+                                    position: 'relative',
+                                    border: '1px solid var(--border-color)',
+                                    background: 'var(--bg-primary)',
+                                    borderRadius: '6px',
+                                    padding: '8px 12px',
+                                    color: '#f4f4f5',
+                                    fontSize: '12px',
+                                    fontWeight: '500',
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center'
+                                }}>
+                                    <span>{models.find(m => m.id === selectedModel)?.name || 'Select Model'}</span>
+                                    <ChevronDown size={14} style={{ opacity: 0.5 }} />
+                                    <select
+                                        value={selectedModel}
+                                        onChange={(e) => setSelectedModel(e.target.value)}
+                                        style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', width: '100%', height: '100%' }}
+                                    >
+                                        {models.map(m => (
+                                            <option key={m.id} value={m.id}>{m.name} ({m.provider || 'local'})</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+                                <span style={{ fontSize: '11.5px', color: 'var(--text-secondary)' }}>Status</span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 8px #10b981' }} />
+                                    <span style={{ fontSize: '11px', color: '#10b981', fontWeight: 'bold' }}>CONNECTED</span>
+                                </div>
                             </div>
                         </div>
-                    );
-                })}
-                {loading && (
-                    <div style={{ display: 'flex', gap: '8px', padding: '12px', alignItems: 'center', color: 'var(--text-secondary)' }}>
-                        <Loader2 size={16} className="animate-spin" />
-                        <span style={{ fontSize: '12px' }}>Thinking...</span>
                     </div>
-                )}
-                <div ref={messagesEndRef} />
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <div style={{ fontSize: '10px', fontWeight: '700', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>AI Capabilities</div>
+                        {[
+                            { name: 'Terminal Execution', desc: 'Allows AI to execute commands locally', status: 'Approved' },
+                            { name: 'Patch Apply Layer', desc: 'Allows AI to stage and insert code diffs', status: 'Approved' },
+                            { name: 'Semantic Memory Index', desc: 'Retrieves localized context via ChromaDB', status: 'Active' },
+                            { name: 'Jupyter Kernel Link', desc: 'Allows AI to run python cells in notebooks', status: 'Connected' }
+                        ].map((cap, cIdx) => (
+                            <div key={cIdx} style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                padding: '10px 12px',
+                                background: 'rgba(255, 255, 255, 0.02)',
+                                border: '1px solid rgba(255, 255, 255, 0.04)',
+                                borderRadius: '8px'
+                            }}>
+                                <div>
+                                    <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#e5e7eb' }}>{cap.name}</div>
+                                    <div style={{ fontSize: '10px', color: 'var(--text-secondary)', marginTop: '2px' }}>{cap.desc}</div>
+                                </div>
+                                <span style={{
+                                    fontSize: '9px',
+                                    fontWeight: 'bold',
+                                    textTransform: 'uppercase',
+                                    background: 'rgba(59, 130, 246, 0.12)',
+                                    color: '#60a5fa',
+                                    padding: '2px 6px',
+                                    borderRadius: '4px'
+                                }}>
+                                    {cap.status}
+                                </span>
+                            </div>
+                        ))}
+                    </div>
                 </div>
-            </div>
+            )}
 
-            <div className="ai-composer-shell">
-                <div style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    background: 'linear-gradient(180deg, rgba(39,39,42,0.95), rgba(24,24,27,0.96))',
-                    borderRadius: '14px',
-                    border: '1px solid rgba(255,255,255,0.08)',
-                    padding: '10px',
-                    boxShadow: '0 12px 30px rgba(0,0,0,0.24)'
-                }}>
-                    <textarea
-                        value={input}
-                        onChange={(e) => {
-                            setInput(e.target.value);
-                            e.target.style.height = 'auto';
-                            e.target.style.height = Math.min(e.target.scrollHeight, 180) + 'px';
-                        }}
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter' && !e.shiftKey) {
-                                e.preventDefault();
-                                handleSend();
-                                e.target.style.height = '40px';
-                            }
-                        }}
-                        placeholder="Ask anything, @ to mention, / for workflows"
-                        className="sleek-input"
-                        style={{
-                            border: 'none',
-                            background: 'transparent',
-                            minHeight: '40px',
-                            maxHeight: '180px',
-                            resize: 'none',
-                            padding: '4px',
-                            width: '100%',
-                            color: '#f4f4f5',
-                            boxSizing: 'border-box'
-                        }}
-                    />
-
+            {/* Chat Tab Composer */}
+            {activeTab === 'chat' && (
+                <div className="ai-composer-shell">
                     <div style={{
                         display: 'flex',
-                        alignItems: 'center',
-                        gap: '12px',
-                        marginTop: '10px',
-                        paddingTop: '10px',
-                        borderTop: '1px solid rgba(255,255,255,0.06)'
+                        flexDirection: 'column',
+                        background: 'linear-gradient(180deg, rgba(39,39,42,0.95), rgba(24,24,27,0.96))',
+                        borderRadius: '14px',
+                        border: '1px solid rgba(255,255,255,0.08)',
+                        padding: '10px',
+                        boxShadow: '0 12px 30px rgba(0,0,0,0.24)'
                     }}>
-                        <div style={{ display: 'flex', gap: '4px' }}>
-                            <button className="sleek-button" title="Attach Files (Alt+A)">
-                                <Plus size={14} />
-                            </button>
-                            <div 
-                                className="model-selector-custom hover-bg"
-                                style={{ 
-                                    position: 'relative', 
-                                    display: 'flex', 
-                                    alignItems: 'center', 
-                                    gap: '6px', 
-                                    fontSize: '11px', 
-                                    color: 'var(--text-secondary)', 
-                                    cursor: 'pointer', 
-                                    padding: '4px 10px', 
-                                    borderRadius: '6px', 
-                                    border: '1px solid var(--border-subtle)',
-                                    background: 'var(--bg-primary)',
-                                    fontWeight: '500'
-                                }}
-                            >
-                                <Sparkles size={12} style={{ color: 'var(--accent-color)' }} />
-                                <span>{models.find(m => m.id === selectedModel)?.name || 'AI Model'}</span>
-                                <ChevronDown size={12} style={{ opacity: 0.5 }} />
-                                <select
-                                    value={selectedModel}
-                                    onChange={(e) => setSelectedModel(e.target.value)}
-                                    style={{
-                                        position: 'absolute',
-                                        inset: 0,
-                                        opacity: 0,
-                                        cursor: 'pointer',
-                                        width: '100%',
-                                        height: '100%'
-                                    }}
-                                    title="Select AI Model"
-                                >
-                                    {models.map(m => (
-                                        <option key={m.id} value={m.id}>{m.name} ({m.provider || 'local'})</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <button 
-                                onClick={() => setShowModelHub(true)}
-                                className="hover-bg" 
-                                style={{
-                                    background: 'transparent', border: '1px solid var(--border-subtle)', 
-                                    color: 'var(--text-secondary)', padding: '4px 8px', borderRadius: '6px',
-                                    display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', fontSize: '11px'
-                                }}
-                                title="Download Llama/GGUF Models from HuggingFace"
-                            >
-                                <Download size={12} /> Hub
-                            </button>
-                        </div>
+                        <textarea
+                            value={input}
+                            onChange={(e) => {
+                                setInput(e.target.value);
+                                e.target.style.height = 'auto';
+                                e.target.style.height = Math.min(e.target.scrollHeight, 180) + 'px';
+                            }}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' && !e.shiftKey) {
+                                    e.preventDefault();
+                                    handleSend();
+                                    e.target.style.height = '40px';
+                                }
+                            }}
+                            placeholder="Ask anything, @ to mention, / for workflows"
+                            className="sleek-input"
+                            style={{
+                                border: 'none',
+                                background: 'transparent',
+                                minHeight: '40px',
+                                maxHeight: '180px',
+                                resize: 'none',
+                                padding: '4px',
+                                width: '100%',
+                                color: '#f4f4f5',
+                                boxSizing: 'border-box'
+                            }}
+                        />
 
-                        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            {loading && (
-                                <button
-                                    onClick={handleStop}
-                                    className="sleek-button"
-                                    style={{ color: '#f44336', gap: '4px', padding: '4px 8px', fontSize: '11px' }}
-                                    title="Interrupt AI"
-                                >
-                                    <Square size={10} fill="#f44336" stroke="none" />
-                                    STOP
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '12px',
+                            marginTop: '10px',
+                            paddingTop: '10px',
+                            borderTop: '1px solid rgba(255,255,255,0.06)'
+                        }}>
+                            <div style={{ display: 'flex', gap: '4px' }}>
+                                <button className="sleek-button" title="Attach Files (Alt+A)">
+                                    <Plus size={14} />
                                 </button>
-                            )}
-                            <button
-                                onClick={handleSend}
-                                disabled={loading || !input.trim() || !isReady}
-                                className="sleek-button primary"
-                                style={{
-                                    opacity: (loading || !input.trim() || !isReady) ? 0.5 : 1,
-                                    minWidth: '38px',
-                                    minHeight: '38px',
-                                    borderRadius: '12px',
-                                    boxShadow: '0 8px 20px rgba(59,130,246,0.25)'
-                                }}
-                            >
-                                <Send size={14} />
-                            </button>
+                                <div 
+                                    className="model-selector-custom hover-bg"
+                                    style={{ 
+                                        position: 'relative', 
+                                        display: 'flex', 
+                                        alignItems: 'center', 
+                                        gap: '6px', 
+                                        fontSize: '11px', 
+                                        color: 'var(--text-secondary)', 
+                                        cursor: 'pointer', 
+                                        padding: '4px 10px', 
+                                        borderRadius: '6px', 
+                                        border: '1px solid var(--border-subtle)',
+                                        background: 'var(--bg-primary)',
+                                        fontWeight: '500'
+                                    }}
+                                >
+                                    <Sparkles size={12} style={{ color: 'var(--accent-color)' }} />
+                                    <span>{models.find(m => m.id === selectedModel)?.name || 'AI Model'}</span>
+                                    <ChevronDown size={12} style={{ opacity: 0.5 }} />
+                                    <select
+                                        value={selectedModel}
+                                        onChange={(e) => setSelectedModel(e.target.value)}
+                                        style={{
+                                            position: 'absolute',
+                                            inset: 0,
+                                            opacity: 0,
+                                            cursor: 'pointer',
+                                            width: '100%',
+                                            height: '100%'
+                                        }}
+                                        title="Select AI Model"
+                                    >
+                                        {models.map(m => (
+                                            <option key={m.id} value={m.id}>{m.name} ({m.provider || 'local'})</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <button 
+                                    onClick={() => setShowModelHub(true)}
+                                    className="hover-bg" 
+                                    style={{
+                                        background: 'transparent', border: '1px solid var(--border-subtle)', 
+                                        color: 'var(--text-secondary)', padding: '4px 8px', borderRadius: '6px',
+                                        display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', fontSize: '11px'
+                                    }}
+                                    title="Download Llama/GGUF Models from HuggingFace"
+                                >
+                                    <Download size={12} /> Hub
+                                </button>
+                            </div>
+
+                            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                {loading && (
+                                    <button
+                                        onClick={handleStop}
+                                        className="sleek-button"
+                                        style={{ color: '#f44336', gap: '4px', padding: '4px 8px', fontSize: '11px' }}
+                                        title="Interrupt AI"
+                                    >
+                                        <Square size={10} fill="#f44336" stroke="none" />
+                                        STOP
+                                    </button>
+                                )}
+                                <button
+                                    onClick={handleSend}
+                                    disabled={loading || !input.trim() || !isReady}
+                                    className="sleek-button primary"
+                                    style={{
+                                        opacity: (loading || !input.trim() || !isReady) ? 0.5 : 1,
+                                        minWidth: '38px',
+                                        minHeight: '38px',
+                                        borderRadius: '12px',
+                                        boxShadow: '0 8px 20px rgba(59,130,246,0.25)'
+                                    }}
+                                >
+                                    <Send size={14} />
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
+            )}
 
             {showClearConfirm && (
                 <ConfirmModal

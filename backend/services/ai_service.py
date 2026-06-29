@@ -233,10 +233,11 @@ def apply_patch(path: str, search_block: str, replace_block: str) -> str:
         with open(path, 'r', encoding='utf-8') as f:
             content = f.read()
             
-        if search_block not in content:
-            return "Error: Could not find the exact search block in the file. Ensure whitespace and indentation match exactly."
+        try:
+            new_content = agent_tools.fuzzy_apply_patch(content, search_block, replace_block)
+        except Exception as e:
+            return f"Error: Could not find matching code block. {str(e)}"
             
-        new_content = content.replace(search_block, replace_block)
         diff = generate_diff(path, content, new_content)
         
         if ai_service_instance:
@@ -284,6 +285,159 @@ def recall(query: str) -> str:
         return "No relevant memories found."
     return "\n---\n".join([r["content"] for r in results])
 
+@tool
+def read_notebook(path: str) -> str:
+    """Read all cells and execution history of the Jupyter notebook (.ipynb) at the given path."""
+    import json
+    try:
+        if not os.path.exists(path):
+            return f"Error: Notebook not found at {path}"
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        cells_summary = []
+        for i, cell in enumerate(data.get("cells", [])):
+            cell_type = cell.get("cell_type", "code")
+            source = "".join(cell.get("source", []))
+            outputs = cell.get("outputs", [])
+            output_summary = []
+            for out in outputs:
+                if out.get("output_type") == "stream":
+                    output_summary.append("".join(out.get("text", [])))
+                elif out.get("output_type") == "error":
+                    output_summary.append("".join(out.get("traceback", [])))
+                elif out.get("output_type") in ["display_data", "execute_result"]:
+                    output_summary.append(str(out.get("data", {}).get("text/plain", "")))
+            
+            summary = f"Cell {i} [{cell_type}]:\nSource:\n{source}\n"
+            if output_summary:
+                summary += f"Output:\n{''.join(output_summary)}\n"
+            summary += "---"
+            cells_summary.append(summary)
+        return "\n".join(cells_summary)
+    except Exception as e:
+        return f"Error reading notebook: {str(e)}"
+
+@tool
+def write_notebook_cell(path: str, cell_index: int, source_code: str) -> str:
+    """Overwrite the content of an existing cell at cell_index in the notebook at the given path."""
+    import json
+    try:
+        if not os.path.exists(path):
+            return f"Error: Notebook not found at {path}"
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        
+        cells = data.get("cells", [])
+        if cell_index < 0 or cell_index >= len(cells):
+            return f"Error: Cell index {cell_index} is out of bounds. Notebook has {len(cells)} cells."
+            
+        lines = source_code.splitlines()
+        source_lines = [line + "\n" for line in lines[:-1]] + ([lines[-1]] if lines else [])
+        cells[cell_index]["source"] = source_lines
+        cells[cell_index]["outputs"] = []
+        cells[cell_index]["execution_count"] = None
+        
+        data["cells"] = cells
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=1)
+            
+        # Emit event to notify frontend to reload notebook
+        try:
+            from backend.api.system import global_app
+            if global_app:
+                global_app.emit("notebook:reload", {"path": path})
+        except Exception:
+            pass
+            
+        return f"Successfully modified cell {cell_index} in notebook {path}."
+    except Exception as e:
+        return f"Error modifying cell: {str(e)}"
+
+@tool
+def add_notebook_cell(path: str, cell_type: str, source_code: str, cell_index: Optional[int] = None) -> str:
+    """Add a new cell of cell_type ('code' or 'markdown') to the notebook at path. Optionally specify a cell_index to insert, default is append at the end."""
+    import json
+    try:
+        if not os.path.exists(path):
+            return f"Error: Notebook not found at {path}"
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            
+        cells = data.get("cells", [])
+        
+        lines = source_code.splitlines()
+        source_lines = [line + "\n" for line in lines[:-1]] + ([lines[-1]] if lines else [])
+        
+        new_cell = {
+            "cell_type": cell_type,
+            "metadata": {},
+            "source": source_lines
+        }
+        if cell_type == "code":
+            new_cell["outputs"] = []
+            new_cell["execution_count"] = None
+            
+        if cell_index is None:
+            cells.append(new_cell)
+            new_idx = len(cells) - 1
+        else:
+            idx = max(0, min(len(cells), cell_index))
+            cells.insert(idx, new_cell)
+            new_idx = idx
+            
+        data["cells"] = cells
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=1)
+            
+        # Emit event to notify frontend to reload notebook
+        try:
+            from backend.api.system import global_app
+            if global_app:
+                global_app.emit("notebook:reload", {"path": path})
+        except Exception:
+            pass
+            
+        return f"Successfully added {cell_type} cell at index {new_idx} to notebook {path}."
+    except Exception as e:
+        return f"Error adding cell: {str(e)}"
+
+@tool
+def run_notebook_cell(path: str, cell_index: int) -> str:
+    """Run the cell at cell_index in the notebook at path using the persistent interactive python kernel."""
+    import json
+    try:
+        if not os.path.exists(path):
+            return f"Error: Notebook not found at {path}"
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            
+        cells = data.get("cells", [])
+        if cell_index < 0 or cell_index >= len(cells):
+            return f"Error: Cell index {cell_index} is out of bounds."
+            
+        cell = cells[cell_index]
+        if cell.get("cell_type") != "code":
+            return "Error: Cannot execute a non-code cell."
+            
+        code = "".join(cell.get("source", []))
+        
+        from backend.api.system import global_app, kernel
+        if not global_app:
+            return "Error: Pytron app instance is not ready."
+            
+        # Clear previous outputs for this cell in JS if needed
+        global_app.emit("notebook:clear", {"cell_id": cell_index, "path": path})
+        
+        # Execute using backend kernel and stream output
+        success = kernel.execute(cell_index, code, global_app, path=path)
+        
+        if success:
+            return f"Cell {cell_index} executed successfully."
+        else:
+            return f"Cell {cell_index} execution failed."
+    except Exception as e:
+        return f"Error running cell: {str(e)}"
+
 class AIService:
     def __init__(self, api_key: str):
         self.api_key = api_key
@@ -296,7 +450,8 @@ class AIService:
             list_directory, execute_command,
             get_project_map, advanced_search, apply_patch,
             git_status, git_diff, git_log, memorize, recall,
-            read_directory_context, undo_last_change
+            read_directory_context, undo_last_change,
+            read_notebook, write_notebook_cell, add_notebook_cell, run_notebook_cell
         ]
         
         # Load custom tools

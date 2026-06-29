@@ -1,0 +1,56 @@
+[
+  {
+    "content": "File: agents.md (Chunk 1)\nContent:\n# Agent Guide\nThis project is built with **Pytron-kit**, a multi-engine desktop framework.\n## Optimizations\n- **Packaging Efficiency:** Use granular imports to minimize bundle size (crucial for `pytron package`).\n  - `from numpy import *` (Bad - bloats binary)\n  - `import numpy as np` (Okay, but full lib)\n  - `from numpy import array` (Good - targeted inclusion)\n- **Lazy Loading:** Import heavy libraries *inside* exposed functions if they aren't needed at startup. This keeps the initial launch under 1s.\n- **Async & Threading:** Exposed functions are powered by `asyncio`. For CPU-intensive tasks, use `run_in_thread=True` (default) to keep the UI responsive.\n- **IPC Batching:** To avoid latency, batch multiple backend updates into one `dispatch()` call rather than emitting many small events.\n- **State Management:** Pytron's reactive state is optimized; direct updates to `app.state` only trigger re-renders for the specific affected components.\n    \n## API Documentation (Flat API)\nAccess these via `app` in Python or `pytron` in JS.\n\n### 1. App Lifecycle & Windows\n- `run()`: Starts the application.\n- `quit()`: Terminates the application.\n- - `create_window(**kwargs)`: Creates a new wind",
+    "metadata": {
+      "file": "agents.md",
+      "type": "codebase_index"
+    },
+    "timestamp": "2026-06-04T13:46:06.085535",
+    "embedding": null
+  },
+  {
+    "content": "File: agents.md (Chunk 2)\nContent:\nigger re-renders for the specific affected components.\n    \n## API Documentation (Flat API)\nAccess these via `app` in Python or `pytron` in JS.\n\n### 1. App Lifecycle & Windows\n- `run()`: Starts the application.\n- `quit()`: Terminates the application.\n- - `create_window(**kwargs)`: Creates a new window. Not required for single-window apps.\n- `show()` / `hide()`: Toggle visibility of all windows.\n\n### 2. IPC & Event Bus\n- **Calls:** `pytron.method_name(args)` in JS calls `@app.expose` in Python.\n- **Python -> JS Events:** Use `app.dispatch(event, data)`. \n  - Handle in JS: `pytron.on('event', (data) => { ... })`\n- **JS -> Python Events:** Use `pytron.emit(event, data)`. \n  - Handle in Python: `@app.listen('event') def my_handler(data): ...`\n\n### 3. Native UI & Dialogs\n- `dialog_open_file(title, path, types)`: Native file picker.\n- `dialog_save_file(title, path, name, types)`: Native save picker.\n- `dialog_open_folder(title, path)`: Native folder picker.\n- `message_box(title, msg, style)`: Native OS alert.\n- `notify(title, msg)`: System notifications.\n\n### 4. Aesthetics (Windows 11)\n- `set_window_curvature(pref)`: 2 for Rounded, 1 for Square.\n- `set_background_material(mat)`: 'mica', ",
+    "metadata": {
+      "file": "agents.md",
+      "type": "codebase_index"
+    },
+    "timestamp": "2026-06-04T13:46:09.750145",
+    "embedding": null
+  },
+  {
+    "content": "File: agents.md (Chunk 3)\nContent:\nicker.\n- `dialog_open_folder(title, path)`: Native folder picker.\n- `message_box(title, msg, style)`: Native OS alert.\n- `notify(title, msg)`: System notifications.\n\n### 4. Aesthetics (Windows 11)\n- `set_window_curvature(pref)`: 2 for Rounded, 1 for Square.\n- `set_background_material(mat)`: 'mica', 'acrylic', 'tabbed', 'none'.\n- `set_border_color(hex)`: Set window border color (e.g., \"#333333\").\n\n### 5. OS & Integration\n- `shortcut(combo, func)`: Register global hotkeys.\n- `on_exit(func)`: Cleanup hook on app close.\n- `on_file_drop(func)`: Hook for drag-and-drop onto window.\n- `open_external(url)`: Open link in default browser.\n- `copy_to_clipboard(text)` / `get_clipboard_text()`.\n- `store_set(key, val)` / `store_get(key)`: Persistent storage.\n\n## CLI Reference\nRun these from the project root.\n- `pytron help`: Shows this help message.\n- `pytron run`: Starts the app. Use `--dev` for hot-reload.\n- `pytron install`: Installs Python and Frontend dependencies.\n- `pytron install <package>`: Install a specific Python package (important for packaging).\n- `pytron frontend <cmd>`: Run JS commands (e.g., `run build`).\n- `pytron build-frontend frontend`: Manually triggers the JS build.\n- `pytr",
+    "metadata": {
+      "file": "agents.md",
+      "type": "codebase_index"
+    },
+    "timestamp": "2026-06-04T13:46:10.472869",
+    "embedding": null
+  },
+  {
+    "content": "File: agents.md (Chunk 4)\nContent:\neload.\n- `pytron install`: Installs Python and Frontend dependencies.\n- `pytron install <package>`: Install a specific Python package (important for packaging).\n- `pytron frontend <cmd>`: Run JS commands (e.g., `run build`).\n- `pytron build-frontend frontend`: Manually triggers the JS build.\n- `pytron package`: Bundles the app into a standalone executable.\n- `pytron doctor`: Checks for missing system dependencies.\n- `pytron plugin [install|list|create]`: Manages Pytron plugins.\n\n## Agent Strategy\n- Use the `pytron-client` npm package for the bridge.\n- All JS calls are `async`. Always `await pytron.method_name()`.\n- Use `app.state.variable_name` in Python for reactive state; automatically updates frontend.\n- Use `pytron.state.variable_name` in JS to access/observe these variables.\n- Use the `pytron-ui` npm package for high-quality UI elements.\n- Check `settings.json` for engine/window defaults.",
+    "metadata": {
+      "file": "agents.md",
+      "type": "codebase_index"
+    },
+    "timestamp": "2026-06-04T13:46:11.120173",
+    "embedding": null
+  },
+  {
+    "content": "File: agents.md (Chunk 5)\nContent:\naults.",
+    "metadata": {
+      "file": "agents.md",
+      "type": "codebase_index"
+    },
+    "timestamp": "2026-06-04T13:46:11.764182",
+    "embedding": null
+  },
+  {
+    "content": "File: app.py (Chunk 1)\nContent:\nfrom pytron import App\nimport os\nimport sys\n\n# Add current directory to path for backend module imports\nsys.path.append(os.path.dirname(os.path.abspath(__file__)))\n\nfrom backend.api.filesystem import register_filesystem_routes\nfrom backend.api.terminal import register_terminal_routes\nfrom backend.api.git import register_git_routes\nfrom backend.api.utils import register_utils_routes\nfrom backend.api.code_analysis import register_code_analysis_routes\nfrom backend.api.ai import register_ai_routes\nfrom backend.api.settings import register_settings_routes\nfrom backend.api.system import register_system_routes\nfrom backend.api.workspace import register_workspace_routes\nfrom backend.api.architecture import register_architecture_routes\nfrom backend.api.semantic import register_semantic_routes\nfrom backend.api.cli_tools import register_cli_routes\n\ndef setup_log_capture(app):\n    class LogCatcher:\n        def __init__(self, stream, stream_name):\n            self.stream = stream\n            self.stream_name = stream_name\n\n        def write(self, data):\n            if self.stream is not None:\n                self.stream.write(data)\n            if data and isinstance(data, str):\n                ",
+    "metadata": {
+      "file": "app.py",
+      "type": "codebase_index"
+    },
+    "timestamp": "2026-06-04T13:46:12.439138",
+    "embedding": null
+  }
+]

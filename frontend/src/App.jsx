@@ -659,6 +659,7 @@ function MainApp({ currentTheme, onThemeChange }) {
                   onClose={() => setShowAI(false)}
                   messages={aiMessages}
                   setMessages={setAiMessages}
+                  cursorInfo={cursorInfo}
                 />
               </Suspense>
             </div>

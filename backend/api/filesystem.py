@@ -263,6 +263,15 @@ def register_filesystem_routes(app):
             if os.path.exists(path) and os.path.isdir(path):
                 os.chdir(path)
                 print(f"[Backend] CWD changed to: {path}")
+                
+                # Sync memory manager workspace and trigger indexing
+                try:
+                    from backend.services.memory_manager import memory_manager
+                    memory_manager.set_workspace(path)
+                    memory_manager.start_background_indexing(path)
+                except Exception as ex:
+                    print(f"[Backend] Failed to update memory manager: {ex}")
+                    
                 return {"success": True}
             return {"success": False, "error": "Invalid directory"}
         except Exception as e:

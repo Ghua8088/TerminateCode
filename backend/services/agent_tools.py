@@ -68,6 +68,49 @@ def search_code(pattern: str, file_ext: Optional[str] = None, case_sensitive: bo
     
     return "\n".join(results) if results else "No matches found."
 
+def fuzzy_apply_patch(content: str, search_block: str, replace_block: str) -> str:
+    """Fuzzy line-based patch application to prevent failure due to minor whitespace/indentation shifts."""
+    search_lines = [line.strip() for line in search_block.splitlines() if line.strip()]
+    content_lines = content.splitlines()
+    
+    if not search_lines:
+        return content.replace(search_block, replace_block)
+        
+    # Search for matching line sequence ignoring leading/trailing whitespace
+    match_start = -1
+    search_len = len(search_lines)
+    
+    for i in range(len(content_lines) - search_len + 1):
+        slice_lines = [line.strip() for line in content_lines[i:i+search_len] if line.strip()]
+        if len(slice_lines) == search_len and all(s == c for s, c in zip(search_lines, slice_lines)):
+            match_start = i
+            break
+            
+    if match_start == -1:
+        # Fallback to standard difflib sequence matching
+        matcher = difflib.SequenceMatcher(None, search_lines, [c.strip() for c in content_lines])
+        match = matcher.find_longest_match(0, len(search_lines), 0, len(content_lines))
+        if match.size >= max(1, len(search_lines) // 2):
+            match_start = match.b - match.a
+            
+    if match_start != -1:
+        # Extract correct indentation from matching block
+        orig_indent = ""
+        for line in content_lines[match_start:match_start+search_len]:
+            if line.strip():
+                orig_indent = line[:len(line) - len(line.lstrip())]
+                break
+        
+        # Apply indentation to replacement lines
+        indented_replace = []
+        for line in replace_block.splitlines():
+            indented_replace.append(orig_indent + line if line.strip() else line)
+            
+        content_lines[match_start:match_start+search_len] = indented_replace
+        return "\n".join(content_lines)
+        
+    raise ValueError("Could not locate search block in target file (Fuzzy Match Failed).")
+
 def apply_patch(path: str, search_block: str, replace_block: str):
     """Surgically replace a block of code in a file (Diff/Patch)."""
     try:
@@ -77,11 +120,11 @@ def apply_patch(path: str, search_block: str, replace_block: str):
         with open(path, 'r', encoding='utf-8') as f:
             content = f.read()
             
-        if search_block not in content:
-            return "Error: Could not find the exact search block in the file. Ensure whitespace and indentation match exactly."
+        try:
+            new_content = fuzzy_apply_patch(content, search_block, replace_block)
+        except Exception as e:
+            return f"Error: Could not find matching code block. {str(e)}"
             
-        new_content = content.replace(search_block, replace_block)
-        
         with open(path, 'w', encoding='utf-8') as f:
             f.write(new_content)
             

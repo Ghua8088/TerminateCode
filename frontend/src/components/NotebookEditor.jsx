@@ -143,7 +143,25 @@ const NotebookEditor = ({ path, onClose }) => {
             }
             setLoading(false);
         };
+
         load();
+
+        const handleReload = (e) => {
+            const data = e.detail || e;
+            const normalize = (p) => p ? p.toLowerCase().replace(/\\/g, '/') : '';
+            if (data.path && normalize(data.path) === normalize(path)) {
+                console.log("[NotebookEditor] Reloading notebook because of AI modification:", path);
+                load();
+            }
+        };
+
+        pytron.on('notebook:reload', handleReload);
+        window.addEventListener('notebook:reload', handleReload);
+
+        return () => {
+            pytron.off('notebook:reload', handleReload);
+            window.removeEventListener('notebook:reload', handleReload);
+        };
     }, [path]);
 
     const handleSave = async () => {

@@ -293,7 +293,7 @@ def get_embeddings_instance(provider: str = "google"):
             if not GOOGLE_AVAILABLE: return None
             key = get_api_key("google")
             if not key: return None
-            return GoogleGenerativeAIEmbeddings(model="models/embedding-001", google_api_key=key)
+            return GoogleGenerativeAIEmbeddings(model="models/text-embedding-004", google_api_key=key)
         elif provider == "openai":
             if not OPENAI_AVAILABLE: return None
             key = get_api_key("openai")

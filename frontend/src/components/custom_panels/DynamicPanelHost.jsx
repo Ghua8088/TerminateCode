@@ -1,12 +1,30 @@
-import React from 'react';
+import React, { Suspense } from 'react';
 
-const DynamicComponent = ({ componentName, ...props }) => {
-  // In a real implementation, we would use React.lazy or a registry
-  // For this PoC, we will try to resolve from a map of pre-registered or dynamically loaded modules
-  // Since we can't easily dynamic import variables in Vite without glob,
-  // We will assume the index.js in custom_panels exports a map.
-  
-  return <div className="p-4 text-center">Dynamic Panel Placeholder: {componentName}</div>;
+// Use Vite's dynamic glob import to automatically scan all custom panels in this directory
+const modules = import.meta.glob('./*.jsx');
+
+const DynamicComponent = ({ componentName, onClose, ...props }) => {
+  // Normalize matching key (e.g. `./mytool.jsx` from `MyTool`)
+  const matchKey = Object.keys(modules).find(
+    (key) => key.toLowerCase() === `./${componentName.toLowerCase()}.jsx`
+  );
+
+  if (!matchKey) {
+    return (
+      <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '13px' }}>
+        Custom panel "{componentName}" not found. Reload UI or trigger registration.
+      </div>
+    );
+  }
+
+  // Dynamically import the matched module
+  const LazyComponent = React.lazy(modules[matchKey]);
+
+  return (
+    <Suspense fallback={<div style={{ padding: '24px', color: 'var(--text-secondary)', fontSize: '13px' }}>Loading Dynamic Panel...</div>}>
+      <LazyComponent onClose={onClose} {...props} />
+    </Suspense>
+  );
 };
 
 export default DynamicComponent;
